@@ -1,5 +1,5 @@
 import { FIVB_RULES } from "./rules";
-import { groupName } from "./seeding";
+import { bracketSeedOrder, groupName, nextPowerOfTwo } from "./seeding";
 import type { FormatDefinition, Rules, SeedingMethod, Source, StageDef } from "./types";
 
 // Las plantillas solo producen una FormatDefinition: un punto de partida que el organizador
@@ -7,21 +7,73 @@ import type { FormatDefinition, Rules, SeedingMethod, Source, StageDef } from ".
 
 const seeds = (n: number): Source[] => Array.from({ length: n }, (_, i) => ({ type: "seed", seed: i + 1 }));
 
-/**
- * Clasificados de una fase de grupos, ordenados para la llave: primero todos los 1º, luego los 2º…
- * Con el orden estándar de siembra, el 1º de un grupo no cruza al 2º de su mismo grupo en la 1ª ronda.
- */
-export function qualifiers(stageKey: string, groupCount: number, perGroup: number, bestNext = 0): Source[] {
-  const out: Source[] = [];
-  for (let p = 1; p <= perGroup; p++) {
-    for (let g = 0; g < groupCount; g++) {
-      out.push({ type: "group_position", groupKey: `${stageKey}-${groupName(g)}`, position: p });
-    }
+/** Penalización de una 1ª ronda: cruces del mismo grupo (muy malo) y entre mismos puestos (leve). */
+function firstRoundPenalty(entrants: Source[]): number {
+  const size = nextPowerOfTwo(Math.max(entrants.length, 2));
+  const slots = bracketSeedOrder(size).map((seed) => entrants[seed - 1] ?? null);
+  let penalty = 0;
+  for (let i = 0; i < slots.length; i += 2) {
+    const [a, b] = [slots[i], slots[i + 1]];
+    if (a?.type !== "group_position" || b?.type !== "group_position") continue;
+    if (a.groupKey === b.groupKey) penalty += 100;
+    else if (a.position === b.position) penalty += 1;
   }
-  for (let r = 1; r <= bestNext; r++) {
-    out.push({ type: "ranking_position", stageKey, position: perGroup + 1, rank: r });
+  return penalty;
+}
+
+const rotations = <T,>(row: T[]): T[][] => {
+  const out: T[][] = [];
+  for (const base of [row, [...row].reverse()]) {
+    for (let k = 0; k < base.length; k++) out.push([...base.slice(k), ...base.slice(0, k)]);
   }
   return out;
+};
+
+/**
+ * Clasificados de una fase de grupos, ordenados para la llave: primero todos los 1º, luego los 2º…
+ * El orden de cada fila (2º, 3º…) se elige entre rotaciones e inversiones para que nadie cruce
+ * con alguien de su mismo grupo en la 1ª ronda. Si el orden directo ya sirve, se mantiene.
+ */
+export function qualifiers(stageKey: string, groupCount: number, perGroup: number, bestNext = 0): Source[] {
+  const rows: Source[][] = [];
+  for (let p = 1; p <= perGroup; p++) {
+    rows.push(
+      Array.from({ length: groupCount }, (_, g) => ({
+        type: "group_position" as const,
+        groupKey: `${stageKey}-${groupName(g)}`,
+        position: p,
+      })),
+    );
+  }
+  const extras: Source[] = Array.from({ length: bestNext }, (_, r) => ({
+    type: "ranking_position" as const,
+    stageKey,
+    position: perGroup + 1,
+    rank: r + 1,
+  }));
+
+  // Combinaciones de órdenes por fila (la 1ª fila queda fija). Se limita para no explotar.
+  let best = [...rows.flat(), ...extras];
+  let bestPenalty = firstRoundPenalty(best);
+  const options = rows.slice(1).map(rotations);
+  const total = options.reduce((n, o) => n * o.length, 1);
+  if (bestPenalty > 0 && total <= 20000) {
+    const pick = (i: number, chosen: Source[][]) => {
+      if (bestPenalty === 0) return;
+      if (i === options.length) {
+        const candidate = [...rows[0], ...chosen.flat(), ...extras];
+        const penalty = firstRoundPenalty(candidate);
+        if (penalty < bestPenalty) {
+          best = candidate;
+          bestPenalty = penalty;
+        }
+        return;
+      }
+      for (const o of options[i]) pick(i + 1, [...chosen, o]);
+    };
+    pick(0, []);
+  }
+  return best;
 }
 
 export interface TemplateOptions {

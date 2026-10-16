@@ -8,6 +8,7 @@ import {
   type FormatDefinition,
   type TeamRef,
   type TemplateOptions,
+  validateFormat,
 } from "@/lib/engine";
 import { StageView, makeDescribe } from "@/components/StageView";
 import { saveFormat } from "@/app/admin/actions";
@@ -41,9 +42,9 @@ export function FormatBuilder({ categoryId, teams }: { categoryId: string; teams
         : template.build({ ...options, teams: teams.length });
       const gen = generateFormat(format);
       const state = resolveTournament(format, gen, teams, {});
-      return { format, gen, state, err: null };
+      return { format, gen, state, err: null, problems: validateFormat(format, teams.length) };
     } catch (e) {
-      return { format: null, gen: null, state: null, err: (e as Error).message };
+      return { format: null, gen: null, state: null, err: (e as Error).message, problems: [] as string[] };
     }
   }, [customJson, template, options, teams]);
 
@@ -131,14 +132,28 @@ export function FormatBuilder({ categoryId, teams }: { categoryId: string; teams
         )}
       </details>
 
-      {preview.err && <p className="text-sm text-red-600">No se puede generar: {preview.err}</p>}
+      {preview.err && (
+        <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          No se puede generar: {preview.err}
+        </p>
+      )}
+      {preview.problems.length > 0 && (
+        <div role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          <p className="font-semibold">Este formato no se puede jugar completo:</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            {preview.problems.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {preview.gen && preview.state && preview.format && (
         <>
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-sm text-navy-500">
               {preview.gen.matches.length} partidos · {preview.gen.groups.length} grupos · {preview.format.stages.length} fases
             </span>
-            <button className="btn-primary" disabled={pending} onClick={save}>
+            <button className="btn-primary" disabled={pending || preview.problems.length > 0} onClick={save}>
               {pending ? "Guardando…" : "Guardar y generar partidos"}
             </button>
             {error && <span className="text-sm text-red-600">{error}</span>}

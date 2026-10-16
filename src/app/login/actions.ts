@@ -2,15 +2,18 @@
 
 import { redirect } from "next/navigation";
 import { login, logout } from "@/lib/auth";
+import { safeNext } from "@/lib/safe-redirect";
 
 export type SignInState = { error: string; email: string } | null;
 
 export async function signIn(_: SignInState, formData: FormData): Promise<SignInState> {
   const email = String(formData.get("email") ?? "");
-  const ok = await login(email, String(formData.get("password") ?? ""));
-  if (!ok) return { error: "Correo o contraseña incorrectos", email };
-  const next = String(formData.get("next") ?? "/admin");
-  redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/admin");
+  const result = await login(email, String(formData.get("password") ?? ""));
+  if (result === "locked") {
+    return { error: "Demasiados intentos fallidos. Espera 15 minutos y vuelve a intentar.", email };
+  }
+  if (result === "invalid") return { error: "Correo o contraseña incorrectos", email };
+  redirect(safeNext(formData.get("next")));
 }
 
 export async function signOut() {

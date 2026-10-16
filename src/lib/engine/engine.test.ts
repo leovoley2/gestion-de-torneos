@@ -7,6 +7,7 @@ import {
   distributeIntoGroups,
   generateFormat,
   resolveTournament,
+  validateFormat,
   type FormatDefinition,
   type TeamRef,
 } from "./index";
@@ -152,5 +153,81 @@ describe("posiciones", () => {
     // Empate total en puntos y en directo (1 victoria cada uno) → decide el ratio de puntos.
     const ratios = table.map((r) => r.pointRatio);
     expect([...ratios].sort((a, b) => b - a)).toEqual(ratios);
+  });
+});
+
+describe("validación de formatos", () => {
+  it("acepta todas las plantillas con configuraciones normales", () => {
+    const cases: [string, Parameters<(typeof TEMPLATES)[number]["build"]>[0]][] = [
+      ["groups_knockout", { teams: 16, groups: 4, qualifyPerGroup: 2 }],
+      ["groups_knockout", { teams: 12, groups: 3, qualifyPerGroup: 2, bestNext: 2 }],
+      ["pool_fivb_knockout", { teams: 16, groups: 4, qualifyPerGroup: 2 }],
+      ["groups_double", { teams: 16, groups: 4, qualifyPerGroup: 2 }],
+      ["double_elimination", { teams: 12 }],
+      ["single_elimination", { teams: 10 }],
+      ["round_robin", { teams: 5 }],
+      ["groups_crossover_knockout", { teams: 16, groups: 4 }],
+    ];
+    for (const [id, opts] of cases) expect(validateFormat(template(id).build(opts), opts.teams), id).toEqual([]);
+  });
+
+  it("rechaza grupos de 1 dupla (antes la llave quedaba trabada)", () => {
+    const errors = validateFormat(template("groups_knockout").build({ teams: 8, groups: 8, qualifyPerGroup: 2 }), 8);
+    expect(errors.join(" ")).toMatch(/Los grupos A, B, C, D, E, F, G y H quedan con menos de 2 duplas/);
+    expect(errors.length).toBeLessThanOrEqual(3);
+  });
+
+  it("rechaza pedir más clasificados de los que tiene el grupo", () => {
+    const errors = validateFormat(template("groups_knockout").build({ teams: 8, groups: 4, qualifyPerGroup: 3 }), 8);
+    expect(errors.join(" ")).toMatch(/3º puesto de los grupos A, B, C y D/);
+  });
+
+  it("rechaza más 'mejores terceros' de los que existen", () => {
+    const errors = validateFormat(
+      template("groups_knockout").build({ teams: 12, groups: 3, qualifyPerGroup: 2, bestNext: 4 }),
+      12,
+    );
+    expect(errors.join(" ")).toMatch(/4º mejor 3º/);
+  });
+
+  it("rechaza sembrados inexistentes (definición editada a mano)", () => {
+    const f = template("single_elimination").build({ teams: 8 });
+    expect(validateFormat(f, 6).join(" ")).toMatch(/sembrados 7 y 8, pero hay 6/);
+  });
+
+  it("rechaza formatos que no terminan aunque pasen los chequeos puntuales", () => {
+    const f = template("single_elimination").build({ teams: 4 });
+    f.stages.push({
+      key: "S9",
+      name: "Cruce imposible",
+      type: "crossover",
+      matches: [{ key: "X", label: "X", a: { type: "match_winner", matchKey: "no-existe" }, b: { type: "seed", seed: 1 } }],
+    });
+    expect(validateFormat(f, 4).join(" ")).toMatch(/nunca podrán definirse/);
+  });
+});
+
+describe("cruces de la llave desde grupos", () => {
+  it("nadie cruza con su mismo grupo en 1ª ronda (2 a 8 grupos, 2 o 3 clasificados)", () => {
+    for (let g = 2; g <= 8; g++) {
+      for (const q of [2, 3]) {
+        const gen = generateFormat(template("groups_knockout").build({ teams: g * 4, groups: g, qualifyPerGroup: q }));
+        const firstRound = gen.matches.filter((m) => m.stageKey === "S2" && m.round === 1);
+        for (const m of firstRound) {
+          if (m.a?.type === "group_position" && m.b?.type === "group_position") {
+            expect(m.a.groupKey, `${g} grupos, ${q} clasificados: ${m.label}`).not.toBe(m.b.groupKey);
+          }
+        }
+      }
+    }
+  });
+
+  it("con 4 grupos y 2 clasificados mantiene el cruce clásico 1ºA vs 2ºD", () => {
+    const gen = generateFormat(template("groups_knockout").build({ teams: 16, groups: 4, qualifyPerGroup: 2 }));
+    const qf1 = gen.matches.find((m) => m.stageKey === "S2" && m.label === "Cuartos de final 1")!;
+    expect([qf1.a, qf1.b]).toEqual([
+      { type: "group_position", groupKey: "S1-A", position: 1 },
+      { type: "group_position", groupKey: "S1-D", position: 2 },
+    ]);
   });
 });

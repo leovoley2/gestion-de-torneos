@@ -6,6 +6,7 @@ import { stageRules } from "@/lib/engine";
 import { StatusPill } from "@/components/StageView";
 import { saveResult, saveSchedule } from "@/app/admin/actions";
 import type { ScheduleRow } from "@/lib/data";
+import { parseSetInputs } from "@/lib/sets-input";
 
 type Filter = "pending" | "all" | "finished";
 
@@ -116,10 +117,9 @@ function MatchEditor({
 
   const submitResult = () => {
     if (wo) return run(() => saveResult(categoryId, m.key, { sets: [], walkoverWinner: wo }), "Guardado");
-    const filled = sets
-      .filter((s) => s.a !== "" || s.b !== "")
-      .map((s) => ({ a: Number(s.a), b: Number(s.b) }));
-    run(() => saveResult(categoryId, m.key, { sets: filled }), "Guardado");
+    const parsed = parseSetInputs(sets);
+    if ("error" in parsed) return setMsg({ ok: false, text: parsed.error });
+    run(() => saveResult(categoryId, m.key, { sets: parsed.sets }), "Guardado");
   };
 
   return (

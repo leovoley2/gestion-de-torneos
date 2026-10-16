@@ -7,6 +7,7 @@ import {
   generateFormat,
   resolveTournament,
   stageRules,
+  validateFormat,
   type FormatDefinition,
   type MatchResult,
   type SetScore,
@@ -173,7 +174,8 @@ export async function saveFormat(categoryId: string, formatJson: string): Promis
   } catch (e) {
     return fail(`Formato inválido: ${(e as Error).message}`);
   }
-  if (generated.matches.length === 0) return fail("El formato no genera partidos");
+  const problems = validateFormat(format, view.teams.length);
+  if (problems.length > 0) return fail(problems.join(" "));
   await sql.begin(async (tx) => {
     await tx`
       update categories set format = ${tx.json(JSON.parse(JSON.stringify(format)))},
