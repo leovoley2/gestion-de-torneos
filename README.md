@@ -26,7 +26,7 @@ La configuración de producción está en `.env.production.local` (privado, fuer
 
 ```bash
 npm run db:migrate:prod                                      # aplica migraciones en Neon
-npm run admin:create:prod -- correo@ejemplo.com 'contraseña' # crea admin o cambia su contraseña
+npm run admin:create:prod -- correo@ejemplo.com           # crea admin o cambia su contraseña (la pide oculta)
 npm run build && npx next start                              # prueba local contra Neon
 ```
 
