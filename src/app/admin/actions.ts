@@ -86,6 +86,7 @@ export async function createCategory(tournamentId: string, formData: FormData) {
   if (!name || !["F", "M", "X"].includes(gender)) throw new Error("Datos de categoría inválidos");
   const [c] = await sql<{ id: string }[]>`
     insert into categories (tournament_id, name, gender) values (${tournamentId}, ${name}, ${gender}) returning id`;
+  refresh(undefined, tournamentId);
   redirect(`/admin/categorias/${c.id}`);
 }
 

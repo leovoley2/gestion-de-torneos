@@ -4,29 +4,26 @@ import { GENDER_LABEL, getCategoryView } from "@/lib/data";
 import type { ResolvedMatch } from "@/lib/engine";
 import { MatchCard, StageView, makeDescribe, type Helpers } from "@/components/StageView";
 import { LiveRefresh } from "@/components/LiveRefresh";
+import { Tabs } from "@/components/Tabs";
 import { SiteFooter, SiteHeader } from "@/components/Brand";
 
-export const dynamic = "force-dynamic";
+// En caché (CDN de Vercel): miles de visitas no tocan la base de datos. Cada cambio de un
+// administrador invalida la caché al instante (revalidatePath en admin/actions.ts); los
+// 5 minutos son solo un respaldo.
+export const revalidate = 300;
 
-const TABS = [
-  ["partidos", "Partidos"],
-  ["fases", "Grupos y llaves"],
-  ["duplas", "Duplas"],
-] as const;
+// Ninguna página se genera al compilar: cada una se crea en su primera visita y queda en caché.
+export const dynamicParams = true;
+export async function generateStaticParams() {
+  return [];
+}
 
 const dayKey = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Lima" });
 const dayLabel = (iso: string) =>
   new Date(iso).toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long", timeZone: "America/Lima" });
 
-export default async function PublicCategory({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string; catId: string }>;
-  searchParams: Promise<{ vista?: string }>;
-}) {
+export default async function PublicCategory({ params }: { params: Promise<{ id: string; catId: string }> }) {
   const { id, catId } = await params;
-  const { vista = "partidos" } = await searchParams;
   const view = await getCategoryView(catId, { includeDrafts: false });
   if (!view || view.tournament.id !== id) notFound();
   const { category, tournament, teams, teamRefs, state, schedule } = view;
@@ -67,7 +64,7 @@ export default async function PublicCategory({
 
   return (
     <>
-      <LiveRefresh categoryId={category.id} />
+      <LiveRefresh categoryId={category.id} status={category.status} />
       <SiteHeader>
         <Link
           href={`/torneos/${tournament.id}`}
@@ -117,68 +114,67 @@ export default async function PublicCategory({
       </SiteHeader>
 
       <main className="mx-auto -mt-5 max-w-6xl px-4 sm:px-6">
-        <nav
-          aria-label="Secciones"
-          className="inline-flex rounded-xl border border-navy-100 bg-white p-1 shadow-[0_8px_24px_-12px_rgb(12_31_63/0.25)]"
-        >
-          {TABS.map(([k, label]) => (
-            <Link
-              key={k}
-              href={`?vista=${k}`}
-              aria-current={vista === k ? "page" : undefined}
-              className={`rounded-lg px-3.5 py-2 text-sm font-semibold transition-colors duration-150 sm:px-4 ${
-                vista === k ? "bg-navy-800 text-white" : "text-navy-500 hover:bg-sky-50 hover:text-navy-800"
-              }`}
-            >
-              {label}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="mt-6">
-          {!state || !helpers ? (
-            vista !== "duplas" && (
-              <p className="card text-center text-navy-400">La programación se publicará pronto.</p>
-            )
-          ) : vista === "fases" ? (
-            <div className="space-y-6">
-              {category.format!.stages.map((s) => (
-                <StageView key={s.key} stage={s} gen={category.generated!} state={state} helpers={helpers} />
-              ))}
-            </div>
-          ) : vista === "partidos" ? (
-            <div className="space-y-8">
-              {days.map((d) => (
-                <section key={d.key}>
-                  <h2 className="mb-3 text-sm font-semibold text-navy-700 first-letter:uppercase">{d.label}</h2>
-                  <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {d.matches.map((m, i) => (
-                      <li key={m.key} className="rise" style={{ "--i": Math.min(i, 8) } as React.CSSProperties}>
-                        <MatchCard m={m} helpers={helpers} />
-                      </li>
+        <Tabs
+          label="Secciones"
+          tabs={[
+            {
+              key: "partidos",
+              label: "Partidos",
+              content:
+                !state || !helpers ? (
+                  <p className="card text-center text-navy-400">La programación se publicará pronto.</p>
+                ) : (
+                  <div className="space-y-8">
+                    {days.map((d) => (
+                      <section key={d.key}>
+                        <h2 className="mb-3 text-sm font-semibold text-navy-700 first-letter:uppercase">{d.label}</h2>
+                        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                          {d.matches.map((m, i) => (
+                            <li key={m.key} className="rise" style={{ "--i": Math.min(i, 8) } as React.CSSProperties}>
+                              <MatchCard m={m} helpers={helpers} />
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
                     ))}
-                  </ul>
-                </section>
-              ))}
-            </div>
-          ) : null}
-
-          {vista === "duplas" && (
-            <ol className="card divide-y divide-navy-50 p-0">
-              {teams.map((t) => (
-                <li key={t.id} className="flex items-center gap-4 px-5 py-3 text-sm">
-                  <span className="grid size-7 shrink-0 place-items-center rounded-full bg-sky-100 text-xs font-bold text-navy-800 tabular-nums">
-                    {t.seed}
-                  </span>
-                  <span className="font-medium text-navy-900">{t.player1}</span>
-                  <span className="text-navy-200">/</span>
-                  <span className="font-medium text-navy-900">{t.player2}</span>
-                </li>
-              ))}
-              {teams.length === 0 && <li className="px-5 py-4 text-navy-400">Aún no hay duplas inscritas.</li>}
-            </ol>
-          )}
-        </div>
+                  </div>
+                ),
+            },
+            {
+              key: "fases",
+              label: "Grupos y llaves",
+              content:
+                !state || !helpers ? (
+                  <p className="card text-center text-navy-400">La programación se publicará pronto.</p>
+                ) : (
+                  <div className="space-y-6">
+                    {category.format!.stages.map((s) => (
+                      <StageView key={s.key} stage={s} gen={category.generated!} state={state} helpers={helpers} />
+                    ))}
+                  </div>
+                ),
+            },
+            {
+              key: "duplas",
+              label: "Duplas",
+              content: (
+                <ol className="card divide-y divide-navy-50 p-0">
+                  {teams.map((t) => (
+                    <li key={t.id} className="flex items-center gap-4 px-5 py-3 text-sm">
+                      <span className="grid size-7 shrink-0 place-items-center rounded-full bg-sky-100 text-xs font-bold text-navy-800 tabular-nums">
+                        {t.seed}
+                      </span>
+                      <span className="font-medium text-navy-900">{t.player1}</span>
+                      <span className="text-navy-200">/</span>
+                      <span className="font-medium text-navy-900">{t.player2}</span>
+                    </li>
+                  ))}
+                  {teams.length === 0 && <li className="px-5 py-4 text-navy-400">Aún no hay duplas inscritas.</li>}
+                </ol>
+              ),
+            },
+          ]}
+        />
       </main>
       <SiteFooter />
     </>

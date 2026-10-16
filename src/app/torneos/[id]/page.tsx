@@ -6,7 +6,16 @@ import { PHASE_LABEL, formatRange, tournamentPhase } from "@/lib/format";
 import { SiteFooter, SiteHeader } from "@/components/Brand";
 import { PhaseBadge } from "@/components/PhaseBadge";
 
-export const dynamic = "force-dynamic";
+// En caché (CDN de Vercel): miles de visitas no tocan la base de datos. Cada cambio de un
+// administrador invalida la caché al instante (revalidatePath en admin/actions.ts); los
+// 5 minutos son solo un respaldo.
+export const revalidate = 300;
+
+// Ninguna página se genera al compilar: cada una se crea en su primera visita y queda en caché.
+export const dynamicParams = true;
+export async function generateStaticParams() {
+  return [];
+}
 
 const STATUS = {
   setup: { label: "Por iniciar", phase: "upcoming" },

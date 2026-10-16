@@ -3,21 +3,28 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-const INTERVAL_MS = 10_000;
+type Status = "setup" | "in_progress" | "finished";
+
+/** Cada cuánto preguntar según el estado: en juego 10 s, por iniciar 60 s, terminada nunca. */
+const INTERVAL_MS: Record<Status, number | null> = { in_progress: 10_000, setup: 60_000, finished: null };
 
 /**
- * Mantiene la vista pública al día: cada 10 s pregunta si la categoría cambió y solo entonces
- * recarga los datos. No consulta mientras la pestaña está en segundo plano.
+ * Mantiene la vista pública al día: pregunta si la categoría cambió y solo entonces recarga los
+ * datos. No consulta con la pestaña en segundo plano. La respuesta viene del CDN (ver
+ * api/version), así que muchos espectadores no multiplican las consultas a la base de datos.
  */
-export function LiveRefresh({ categoryId }: { categoryId: string }) {
+export function LiveRefresh({ categoryId, status }: { categoryId: string; status: Status }) {
   const router = useRouter();
   useEffect(() => {
+    const interval = INTERVAL_MS[status];
+    if (interval === null) return;
     let last: string | null = null;
     let stopped = false;
     const check = async () => {
       if (document.hidden) return;
       try {
-        const res = await fetch(`/api/version/${categoryId}`, { cache: "no-store" });
+        // Caché "default": sin cabeceras no-cache, para que el CDN pueda responder.
+        const res = await fetch(`/api/version/${categoryId}`);
         if (!res.ok) return;
         const { v } = (await res.json()) as { v: string };
         if (last !== null && v !== last && !stopped) router.refresh();
@@ -27,7 +34,7 @@ export function LiveRefresh({ categoryId }: { categoryId: string }) {
       }
     };
     check();
-    const timer = setInterval(check, INTERVAL_MS);
+    const timer = setInterval(check, interval);
     const onVisible = () => !document.hidden && check();
     document.addEventListener("visibilitychange", onVisible);
     return () => {
@@ -35,6 +42,6 @@ export function LiveRefresh({ categoryId }: { categoryId: string }) {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [categoryId, router]);
+  }, [categoryId, status, router]);
   return null;
 }
