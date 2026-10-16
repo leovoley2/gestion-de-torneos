@@ -1,29 +1,173 @@
 @import "tailwindcss";
 
+/* ───────── Paleta: azul marino profundo + azul cielo ───────── */
+@theme {
+  --color-navy-50: #eef4fb;
+  --color-navy-100: #d8e5f5;
+  --color-navy-200: #b0c8e8;
+  --color-navy-300: #7fa3d3;
+  --color-navy-400: #4f7cba;
+  --color-navy-500: #2f5d9e;
+  --color-navy-600: #214a85;
+  --color-navy-700: #1a3a6b;
+  --color-navy-800: #132c54;
+  --color-navy-900: #0c1f3f;
+  --color-navy-950: #071429;
+
+  /* Curvas: ease-out fuerte para entradas e interacción (nunca ease-in en UI). */
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
+:root {
+  color-scheme: light;
+}
+
 body {
-  background: #f6f7f9;
-  color: #171717;
+  background: #f2f7fc;
+  color: var(--color-navy-950);
+}
+
+/* Fondo de marca: marino con un brillo cielo, como el agua vista desde arriba. */
+.bg-ocean {
+  background:
+    radial-gradient(120% 90% at 85% -10%, rgb(56 189 248 / 0.35), transparent 55%),
+    radial-gradient(90% 70% at 0% 110%, rgb(14 165 233 / 0.22), transparent 60%),
+    linear-gradient(160deg, var(--color-navy-950), var(--color-navy-800));
 }
 
 @layer components {
   .input {
-    @apply w-full rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm;
+    @apply w-full rounded-lg border border-navy-100 bg-white px-3 py-2 text-sm text-navy-950 shadow-[0_1px_0_rgb(12_31_63/0.03)] outline-none placeholder:text-navy-300;
+    transition:
+      border-color 150ms ease,
+      box-shadow 150ms ease;
+  }
+  .input:focus {
+    @apply border-sky-400;
+    box-shadow: 0 0 0 3px rgb(56 189 248 / 0.25);
+  }
+  .input:disabled {
+    @apply bg-navy-50 text-navy-300;
+  }
+
+  /* Botones: responden al presionar (scale 0.97) con una transición corta y precisa. */
+  .btn,
+  .btn-primary,
+  .btn-danger,
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold select-none disabled:pointer-events-none disabled:opacity-45;
+    transition:
+      transform 160ms var(--ease-out-strong),
+      background-color 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease;
+  }
+  .btn:active,
+  .btn-primary:active,
+  .btn-danger:active,
+  .btn-ghost:active {
+    transform: scale(0.97);
   }
   .btn-primary {
-    @apply rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50;
+    @apply bg-navy-800 text-white shadow-[0_1px_2px_rgb(7_20_41/0.25),inset_0_1px_0_rgb(255_255_255/0.08)];
   }
   .btn {
-    @apply rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50;
+    @apply border border-navy-100 bg-white text-navy-800;
   }
   .btn-danger {
-    @apply rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50;
+    @apply border border-red-200 bg-white text-red-700;
   }
-  .card {
-    @apply rounded-xl bg-white p-4 shadow-sm;
+  .btn-ghost {
+    @apply text-sky-100;
+  }
+
+  .card,
+  .card-link {
+    @apply rounded-2xl border border-navy-100/70 bg-white p-5 shadow-[0_1px_2px_rgb(12_31_63/0.04),0_8px_24px_-12px_rgb(12_31_63/0.12)];
+  }
+
+  /* Tarjeta enlazada: se eleva un poco al pasar el mouse (solo en dispositivos con mouse). */
+  .card-link {
+    @apply block;
+    transition:
+      transform 200ms var(--ease-out-strong),
+      box-shadow 200ms ease,
+      border-color 200ms ease;
+  }
+  .card-link:active {
+    transform: scale(0.99);
+  }
+
+  .eyebrow {
+    @apply text-[11px] font-semibold tracking-[0.14em] text-sky-600 uppercase;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:hover {
+    @apply bg-navy-700;
+  }
+  .btn:hover {
+    @apply border-sky-200 bg-sky-50;
+  }
+  .btn-danger:hover {
+    @apply bg-red-50;
+  }
+  .btn-ghost:hover {
+    @apply bg-white/10 text-white;
+  }
+  .card-link:hover {
+    @apply border-sky-200;
+    transform: translateY(-2px);
+    box-shadow:
+      0 1px 2px rgb(12 31 63 / 0.04),
+      0 16px 32px -16px rgb(12 31 63 / 0.28);
+  }
+}
+
+/* Entrada escalonada: corta (30–40 ms entre elementos) y sin bloquear la interacción. */
+.rise {
+  animation: rise 360ms var(--ease-out-strong) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* Partido en vivo: un pulso suave solo en el punto indicador. */
+.live-dot {
+  animation: live 1.6s ease-in-out infinite;
+}
+@keyframes live {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise {
+    animation: fade 200ms ease both;
+  }
+  .live-dot {
+    animation: none;
+  }
+  .card-link,
+  .card-link:hover,
+  .card-link:active {
+    transform: none;
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
   }
 }

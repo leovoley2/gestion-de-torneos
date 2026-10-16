@@ -58,7 +58,7 @@ export function FormatBuilder({ categoryId, teams }: { categoryId: string; teams
 
   const num = (label: string, k: "groups" | "qualifyPerGroup" | "bestNext", min: number) => (
     <label className="block text-sm">
-      <span className="mb-1 block text-gray-700">{label}</span>
+      <span className="mb-1 block text-navy-700">{label}</span>
       <input type="number" min={min} className="input" value={options[k]} onChange={(e) => set(k, Math.max(min, Number(e.target.value)))} />
     </label>
   );
@@ -72,15 +72,15 @@ export function FormatBuilder({ categoryId, teams }: { categoryId: string; teams
   return (
     <section className="card space-y-4">
       <div>
-        <h2 className="font-semibold">Formato</h2>
-        <p className="text-sm text-gray-500">
+        <h2 className="font-semibold text-navy-900">Formato</h2>
+        <p className="text-sm text-navy-400">
           Con {teams.length} duplas. Elige una plantilla y ajústala; todo queda editable en la definición.
         </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className="block text-sm sm:col-span-2">
-          <span className="mb-1 block text-gray-700">Plantilla</span>
+          <span className="mb-1 block text-navy-700">Plantilla</span>
           <select
             className="input"
             value={templateId}
@@ -95,14 +95,14 @@ export function FormatBuilder({ categoryId, teams }: { categoryId: string; teams
               </option>
             ))}
           </select>
-          <span className="mt-1 block text-xs text-gray-500">{template.description}</span>
+          <span className="mt-1 block text-xs text-navy-400">{template.description}</span>
         </label>
         {template.uses.includes("groups") && num("Grupos", "groups", 1)}
         {template.uses.includes("qualifyPerGroup") && num("Clasifican por grupo", "qualifyPerGroup", 1)}
         {template.uses.includes("bestNext") && num("Mejores del siguiente puesto", "bestNext", 0)}
         {template.uses.includes("seeding") && (
           <label className="block text-sm">
-            <span className="mb-1 block text-gray-700">Siembra en grupos</span>
+            <span className="mb-1 block text-navy-700">Siembra en grupos</span>
             <select className="input" value={options.seeding} onChange={(e) => set("seeding", e.target.value as TemplateOptions["seeding"])}>
               <option value="serpentine">Serpentina</option>
               <option value="sequential">Secuencial</option>
@@ -135,7 +135,7 @@ export function FormatBuilder({ categoryId, teams }: { categoryId: string; teams
       {preview.gen && preview.state && preview.format && (
         <>
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-navy-500">
               {preview.gen.matches.length} partidos · {preview.gen.groups.length} grupos · {preview.format.stages.length} fases
             </span>
             <button className="btn-primary" disabled={pending} onClick={save}>

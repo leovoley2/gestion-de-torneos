@@ -24,28 +24,33 @@ export function TeamsManager({ categoryId, teams, locked }: { categoryId: string
 
   return (
     <section className="card">
-      <h2 className="font-semibold">Duplas ({teams.length})</h2>
-      <p className="text-sm text-gray-500">
+      <div className="mb-4 flex items-baseline justify-between gap-2">
+        <h2 className="font-semibold text-navy-900">Duplas</h2>
+        <span className="text-xs font-medium text-navy-400 tabular-nums">{teams.length} inscritas</span>
+      </div>
+      <p className="-mt-3 mb-3 text-sm text-navy-400">
         El orden es la siembra (1 = mejor ranking).{" "}
-        {locked && "Para cambiar duplas o siembra hay que reiniciar el formato."}
+        {locked && "Para cambiarla hay que reiniciar el formato."}
       </p>
-      <ol className="mt-3 divide-y">
+      <ol className="divide-y divide-navy-50">
         {teams.map((t, i) => (
-          <li key={t.id} className="flex items-center gap-2 py-1.5 text-sm">
-            <span className="w-6 text-right font-mono text-gray-500">{t.seed}</span>
-            <span className="flex-1">
+          <li key={t.id} className="flex items-center gap-2 py-2 text-sm">
+            <span className="grid size-6 shrink-0 place-items-center rounded-full bg-sky-100 text-[11px] font-bold text-navy-800 tabular-nums">
+              {t.seed}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-navy-900">
               {t.player1} / {t.player2}
             </span>
             {!locked && (
               <>
-                <button className="btn px-2 py-0.5" disabled={pending || i === 0} onClick={() => move(i, -1)} aria-label="Subir">
+                <button className="btn size-7 p-0" disabled={pending || i === 0} onClick={() => move(i, -1)} aria-label="Subir">
                   ↑
                 </button>
-                <button className="btn px-2 py-0.5" disabled={pending || i === teams.length - 1} onClick={() => move(i, 1)} aria-label="Bajar">
+                <button className="btn size-7 p-0" disabled={pending || i === teams.length - 1} onClick={() => move(i, 1)} aria-label="Bajar">
                   ↓
                 </button>
                 <button
-                  className="btn-danger px-2 py-0.5"
+                  className="btn-danger size-7 p-0"
                   disabled={pending}
                   onClick={() => window.confirm(`¿Quitar a ${t.player1} / ${t.player2}?`) && run(() => deleteTeam(categoryId, t.id))}
                   aria-label="Quitar"
@@ -60,17 +65,17 @@ export function TeamsManager({ categoryId, teams, locked }: { categoryId: string
       {!locked && (
         <form
           ref={formRef}
-          className="mt-3 flex flex-wrap gap-2"
+          className="mt-4 flex flex-wrap gap-2 border-t border-navy-50 pt-4"
           action={(fd) => run(() => addTeam(categoryId, fd), () => formRef.current?.reset())}
         >
-          <input name="player1" required placeholder="Jugador 1" className="input max-w-[200px]" />
-          <input name="player2" required placeholder="Jugador 2" className="input max-w-[200px]" />
+          <input name="player1" required placeholder="Jugador 1" aria-label="Jugador 1" className="input min-w-36 flex-1" />
+          <input name="player2" required placeholder="Jugador 2" aria-label="Jugador 2" className="input min-w-36 flex-1" />
           <button className="btn-primary" disabled={pending}>
             Agregar dupla
           </button>
         </form>
       )}
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
     </section>
   );
 }

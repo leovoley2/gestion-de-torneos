@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import type { FormatDefinition, ResolvedMatch } from "@/lib/engine";
 import { stageRules } from "@/lib/engine";
-import { STATUS_LABEL, STATUS_STYLE } from "@/components/StageView";
+import { StatusPill } from "@/components/StageView";
 import { saveResult, saveSchedule } from "@/app/admin/actions";
 import type { ScheduleRow } from "@/lib/data";
 
@@ -36,8 +36,8 @@ export function ResultsEditor({
   return (
     <section className="card">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-semibold">Resultados y programación</h2>
-        <div className="flex gap-1 text-sm">
+        <h2 className="font-semibold text-navy-900">Resultados y programación</h2>
+        <div className="inline-flex rounded-xl bg-navy-50 p-1 text-sm">
           {(
             [
               ["pending", "Por jugarse"],
@@ -45,13 +45,18 @@ export function ResultsEditor({
               ["all", "Todos"],
             ] as const
           ).map(([k, label]) => (
-            <button key={k} onClick={() => setFilter(k)} className={filter === k ? "btn-primary px-3 py-1" : "btn"}>
+            <button
+              key={k}
+              onClick={() => setFilter(k)}
+              aria-pressed={filter === k}
+              className={`rounded-lg px-3 py-1.5 font-semibold transition-colors duration-150 ${filter === k ? "bg-white text-navy-900 shadow-sm" : "text-navy-400 hover:text-navy-800"}`}
+            >
               {label}
             </button>
           ))}
         </div>
       </div>
-      <ul className="mt-3 space-y-2">
+      <ul className="mt-4 space-y-3">
         {shown.map((m) => (
           <MatchEditor
             key={`${m.key}-${JSON.stringify(m.result)}-${m.teamA}-${m.teamB}`}
@@ -63,7 +68,7 @@ export function ResultsEditor({
             schedule={schedule[m.key]}
           />
         ))}
-        {shown.length === 0 && <li className="text-sm text-gray-500">No hay partidos en esta lista.</li>}
+        {shown.length === 0 && <li className="text-sm text-navy-400">No hay partidos en esta lista.</li>}
       </ul>
     </section>
   );
@@ -118,12 +123,14 @@ function MatchEditor({
   };
 
   return (
-    <li className="rounded-lg border p-3 text-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+    <li
+      className={`rounded-xl border p-4 text-sm transition-colors duration-150 ${m.status === "ready" ? "border-sky-200 bg-sky-50/30" : "border-navy-100/70 bg-white"}`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-navy-400">
         <span>
-          P{m.number} · {m.label}
+          <span className="font-semibold text-navy-600">P{m.number}</span> · {m.label}
         </span>
-        <span className={`rounded px-1.5 py-0.5 ${STATUS_STYLE[m.status]}`}>{STATUS_LABEL[m.status]}</span>
+        <StatusPill status={m.status} />
       </div>
 
       <div className="mt-2 grid gap-3 lg:grid-cols-[1fr_auto]">
@@ -131,7 +138,9 @@ function MatchEditor({
           <tbody>
             {(["a", "b"] as const).map((side) => (
               <tr key={side}>
-                <td className={`pr-3 ${m.winner && m.winner === (side === "a" ? m.teamA : m.teamB) ? "font-bold" : ""}`}>
+                <td
+                  className={`py-0.5 pr-3 ${m.winner && m.winner === (side === "a" ? m.teamA : m.teamB) ? "font-semibold text-navy-950" : "text-navy-800"}`}
+                >
                   {(side === "a" ? nameA : nameB) ?? "—"}
                 </td>
                 {sets.map((s, i) => (
@@ -175,7 +184,7 @@ function MatchEditor({
         </div>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-navy-50 pt-3">
         <input className="input w-36" placeholder="Cancha" value={court} onChange={(e) => setCourt(e.target.value)} aria-label="Cancha" />
         <input type="datetime-local" className="input w-auto" value={when} onChange={(e) => setWhen(e.target.value)} aria-label="Fecha y hora" />
         <button
@@ -187,7 +196,7 @@ function MatchEditor({
         </button>
       </div>
 
-      {msg && <p className={`mt-1 text-xs ${msg.ok ? "text-emerald-700" : "text-red-600"}`}>{msg.text}</p>}
+      {msg && <p role="status" className={`mt-2 text-xs font-medium ${msg.ok ? "text-sky-700" : "text-red-600"}`}>{msg.ok ? "✓ " : ""}{msg.text}</p>}
     </li>
   );
 }
