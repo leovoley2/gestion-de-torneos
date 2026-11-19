@@ -3,13 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { createResetLinkForAdmin } from "@/lib/athlete-auth";
 import { eligibilityIssues, fullName, profileIssues } from "@/lib/athletes";
-import { requireAdmin } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { isUuid } from "@/lib/data";
 import { sql } from "@/lib/db";
 import { appUrl, emailLayout, escapeHtml, sendEmail } from "@/lib/email";
 import { activeRegistrationConflict, getRegCategory, getRegistration, missingDeclarations, rulesOf } from "@/lib/registrations";
 
-// Inscripciones y atletas desde el panel. TODA acción empieza con requireAdmin()
+// Inscripciones y atletas desde el panel. TODA acción empieza con requirePermission()
 // (admin/actions.test.ts recorre también este archivo).
 
 type Result = { ok: true; message?: string; link?: string } | { ok: false; error: string };
@@ -27,7 +27,7 @@ function refreshCategory(categoryId: string) {
 // ───────── Ajustes de inscripción de la categoría ─────────
 
 export async function updateRegistrationSettings(categoryId: string, fd: FormData): Promise<Result> {
-  await requireAdmin();
+  await requirePermission("tournament.edit", { categoryId });
   assertId(categoryId);
   const int = (k: string) => {
     const v = String(fd.get(k) ?? "").trim();
@@ -58,7 +58,7 @@ export async function updateRegistrationSettings(categoryId: string, fd: FormDat
 // ───────── Aceptar / rechazar ─────────
 
 export async function acceptRegistration(registrationId: string): Promise<Result> {
-  const admin = await requireAdmin();
+  const admin = await requirePermission("registrations.review", { registrationId });
   assertId(registrationId);
   const reg = await getRegistration(registrationId);
   if (!reg) return fail("Inscripción no encontrada");
@@ -113,7 +113,7 @@ export async function acceptRegistration(registrationId: string): Promise<Result
 }
 
 export async function rejectRegistration(registrationId: string, note: string): Promise<Result> {
-  const admin = await requireAdmin();
+  const admin = await requirePermission("registrations.review", { registrationId });
   assertId(registrationId);
   const reason = String(note ?? "").trim();
   if (reason.length < 3) return fail("Escribe el motivo: los atletas lo verán");
@@ -146,7 +146,7 @@ export async function rejectRegistration(registrationId: string, note: string): 
 
 /** Enlace de un solo uso (24 h) para que el atleta elija una nueva contraseña. */
 export async function adminResetLink(athleteId: string): Promise<Result> {
-  await requireAdmin();
+  await requirePermission("athletes.support");
   assertId(athleteId);
   const [a] = await sql<{ id: string }[]>`select id from athletes where id = ${athleteId}`;
   if (!a) return fail("Atleta no encontrado");
@@ -154,9 +154,47 @@ export async function adminResetLink(athleteId: string): Promise<Result> {
 }
 
 export async function adminVerifyEmail(athleteId: string): Promise<Result> {
-  await requireAdmin();
+  await requirePermission("athletes.support");
   assertId(athleteId);
   await sql`update athletes set email_verified_at = coalesce(email_verified_at, now()) where id = ${athleteId}`;
   revalidatePath("/admin/atletas");
   return { ok: true, message: "Correo marcado como confirmado" };
+}
+
+/**
+ * Une la ficha de un jugador (creada por la organización, sin cuenta) con la cuenta que el jugador
+ * creó después: sus duplas, inscripciones y puntos pasan a la cuenta y la ficha desaparece.
+ */
+export async function mergeAthleteRecord(recordId: string, fd: FormData): Promise<Result> {
+  // Mueve puntos de ranking entre personas: solo el administrador general.
+  await requirePermission("ranking.manage");
+  assertId(recordId);
+  const email = String(fd.get("account_email") ?? "").trim().toLowerCase();
+  const [record] = await sql<{ id: string; email: string | null; document_type: string; document_number: string | null; birthdate: string | null; gender: string | null }[]>`
+    select id, email, document_type, document_number, birthdate, gender from athletes where id = ${recordId}`;
+  if (!record) return fail("Ficha no encontrada");
+  if (record.email) return fail("Esa ficha ya tiene cuenta");
+  const [account] = await sql<{ id: string }[]>`select id from athletes where email = ${email}`;
+  if (!account) return fail("No hay una cuenta de atleta con ese correo");
+
+  await sql.begin(async (tx) => {
+    await tx`update teams set athlete1_id = ${account.id} where athlete1_id = ${record.id}`;
+    await tx`update teams set athlete2_id = ${account.id} where athlete2_id = ${record.id}`;
+    await tx`update registrations set athlete1_id = ${account.id} where athlete1_id = ${record.id}`;
+    await tx`update registrations set athlete2_id = ${account.id} where athlete2_id = ${record.id}`;
+    await tx`update declarations set athlete_id = ${account.id} where athlete_id = ${record.id}`;
+    await tx`delete from athletes where id = ${record.id}`;
+    // La cuenta conserva sus datos; completa con los de la ficha lo que falte (documento incluido).
+    await tx`
+      update athletes set
+        document_type = case when document_number is null then ${record.document_type} else document_type end,
+        document_number = coalesce(document_number, ${record.document_number}),
+        birthdate = coalesce(birthdate, ${record.birthdate}),
+        gender = coalesce(gender, ${record.gender}),
+        updated_at = now()
+      where id = ${account.id}`;
+  });
+  revalidatePath("/admin/atletas");
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Ficha unida a la cuenta: conserva sus duplas y puntos" };
 }

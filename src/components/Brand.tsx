@@ -45,6 +45,9 @@ export function SiteHeader({ children }: { children?: React.ReactNode }) {
           <Wordmark dark />
         </Link>
         <nav className="flex items-center gap-1">
+          <Link href="/ranking" className="btn-ghost px-3 py-1.5 text-xs font-semibold text-white">
+            Ranking
+          </Link>
           <Link href="/cuenta" className="btn-ghost px-3 py-1.5 text-xs font-semibold text-white">
             Soy atleta
           </Link>

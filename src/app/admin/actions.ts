@@ -12,11 +12,13 @@ import {
   type MatchResult,
   type SetScore,
 } from "@/lib/engine";
-import { requireAdmin } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
+import { eligibilityIssues, fullName, type Athlete } from "@/lib/athletes";
 import { getCategoryView, isUuid } from "@/lib/data";
 import { sql } from "@/lib/db";
 
-// TODA acción de este archivo empieza con requireAdmin(): sin sesión de administrador no se
+// TODA acción de este archivo empieza con requirePermission(): sin sesión del equipo y el rol
+// adecuado para ese torneo no se
 // ejecuta nada. Es la única vía de escritura a la base de datos (que solo el servidor conoce).
 // Un test (actions.test.ts) llama a cada acción exportada sin sesión y verifica que falle.
 
@@ -39,7 +41,7 @@ function assertId(id: string) {
 // ───────── Torneos ─────────
 
 export async function createTournament(formData: FormData) {
-  await requireAdmin();
+  await requirePermission("tournament.create");
   const name = text(formData.get("name"));
   if (!name) throw new Error("El torneo necesita un nombre");
   const [t] = await sql<{ id: string }[]>`
@@ -50,7 +52,7 @@ export async function createTournament(formData: FormData) {
 }
 
 export async function updateTournament(id: string, formData: FormData) {
-  await requireAdmin();
+  await requirePermission("tournament.edit", { tournamentId: id });
   assertId(id);
   const name = text(formData.get("name"));
   if (!name) throw new Error("El torneo necesita un nombre");
@@ -62,14 +64,14 @@ export async function updateTournament(id: string, formData: FormData) {
 }
 
 export async function setPublished(id: string, published: boolean) {
-  await requireAdmin();
+  await requirePermission("tournament.edit", { tournamentId: id });
   assertId(id);
   await sql`update tournaments set published = ${published === true} where id = ${id}`;
   refresh(undefined, id);
 }
 
 export async function deleteTournament(id: string) {
-  await requireAdmin();
+  await requirePermission("tournament.edit", { tournamentId: id });
   assertId(id);
   await sql`delete from tournaments where id = ${id}`;
   revalidatePath("/", "layout");
@@ -79,7 +81,7 @@ export async function deleteTournament(id: string) {
 // ───────── Categorías ─────────
 
 export async function createCategory(tournamentId: string, formData: FormData) {
-  await requireAdmin();
+  await requirePermission("tournament.edit", { tournamentId });
   assertId(tournamentId);
   const name = text(formData.get("name"));
   const gender = text(formData.get("gender"));
@@ -91,7 +93,7 @@ export async function createCategory(tournamentId: string, formData: FormData) {
 }
 
 export async function deleteCategory(categoryId: string, tournamentId: string) {
-  await requireAdmin();
+  await requirePermission("tournament.edit", { categoryId });
   assertId(categoryId);
   assertId(tournamentId);
   await sql`delete from categories where id = ${categoryId}`;
@@ -107,25 +109,100 @@ async function formatLocked(categoryId: string): Promise<string | null> {
   return c.locked ? "El formato ya está generado. Para cambiar duplas, reinicia el formato." : null;
 }
 
+export interface AthleteOption {
+  id: string;
+  name: string;
+  document: string | null;
+  gender: "F" | "M" | null;
+  birthdate: string | null;
+  hasAccount: boolean;
+}
+
+/** Busca atletas (con o sin cuenta) por nombre o documento para armar una dupla a mano. */
+export async function searchAthletes(categoryId: string, query: string): Promise<AthleteOption[]> {
+  await requirePermission("tournament.edit", { categoryId });
+  const q = String(query ?? "").trim().slice(0, 60);
+  if (q.length < 2) return [];
+  const like = `%${q.replace(/[%_\\]/g, "\\$&")}%`;
+  const rows = await sql<(Athlete & { has_account: boolean })[]>`
+    select *, (email is not null) as has_account from athletes
+    where (first_name || ' ' || last_name) ilike ${like} or document_number ilike ${like}
+    order by last_name, first_name limit 8`;
+  return rows.map((a) => ({
+    id: a.id,
+    name: fullName(a),
+    document: a.document_number,
+    gender: a.gender,
+    birthdate: a.birthdate,
+    hasAccount: a.has_account,
+  }));
+}
+
+/** Crea la ficha de un jugador sin cuenta (si luego se registra, se une a su cuenta). */
+export async function createAthleteRecord(categoryId: string, formData: FormData): Promise<Result & { athlete?: AthleteOption }> {
+  const admin = await requirePermission("tournament.edit", { categoryId });
+  const firstName = text(formData.get("first_name"));
+  const lastName = text(formData.get("last_name"));
+  const documentNumber = text(formData.get("document_number")).toUpperCase().replace(/\s+/g, "");
+  const gender = text(formData.get("gender"));
+  const birthdate = optional(formData.get("birthdate"));
+  if (!firstName || !lastName) return fail("Escribe nombres y apellidos");
+  if (!/^[A-Z0-9-]{5,20}$/.test(documentNumber)) return fail("Escribe un número de documento válido");
+  if (gender !== "F" && gender !== "M") return fail("Elige el sexo");
+  if (birthdate && !/^\d{4}-\d{2}-\d{2}$/.test(birthdate)) return fail("Fecha de nacimiento inválida");
+  try {
+    const [a] = await sql<Athlete[]>`
+      insert into athletes (first_name, last_name, document_number, gender, birthdate, created_by_admin)
+      values (${firstName}, ${lastName}, ${documentNumber}, ${gender}, ${birthdate}, ${admin.id})
+      returning *`;
+    return {
+      ok: true,
+      athlete: { id: a.id, name: fullName(a), document: a.document_number, gender: a.gender, birthdate: a.birthdate, hasAccount: false },
+    };
+  } catch (e) {
+    if ((e as { code?: string }).code === "23505") return fail("Ya existe un atleta con ese documento: búscalo por su documento");
+    throw e;
+  }
+}
+
+/** Agrega una dupla a mano con dos atletas identificados (necesario para el ranking). */
 export async function addTeam(categoryId: string, formData: FormData): Promise<Result> {
-  await requireAdmin();
+  await requirePermission("tournament.edit", { categoryId });
   assertId(categoryId);
   const blocked = await formatLocked(categoryId);
   if (blocked) return fail(blocked);
-  const player1 = text(formData.get("player1"));
-  const player2 = text(formData.get("player2"));
-  if (!player1 || !player2) return fail("Escribe los dos jugadores");
+  const ids = [text(formData.get("athlete1_id")), text(formData.get("athlete2_id"))];
+  if (!ids.every(isUuid)) return fail("Elige a los dos jugadores");
+  if (ids[0] === ids[1]) return fail("Elige dos jugadores distintos");
+  const athletes = await sql<Athlete[]>`select * from athletes where id = any(${ids}::uuid[])`;
+  const a1 = athletes.find((a) => a.id === ids[0]);
+  const a2 = athletes.find((a) => a.id === ids[1]);
+  if (!a1 || !a2) return fail("Jugador no encontrado");
+
+  const [category] = await sql<{ gender: "F" | "M" | "X"; min_birth_year: number | null; max_birth_year: number | null }[]>`
+    select gender, min_birth_year, max_birth_year from categories where id = ${categoryId}`;
+  const issues = eligibilityIssues(
+    { ...category, registration_open: true, registration_deadline: null, has_format: false },
+    a1,
+    a2,
+  );
+  if (issues.length) return fail(issues.join(". "));
+  const [dup] = await sql<{ id: string }[]>`
+    select id from teams where category_id = ${categoryId}
+      and (athlete1_id = any(${ids}::uuid[]) or athlete2_id = any(${ids}::uuid[])) limit 1`;
+  if (dup) return fail("Uno de los jugadores ya está en otra dupla de esta categoría");
+
   await sql`
-    insert into teams (category_id, player1, player2, seed)
-    values (${categoryId}, ${player1}, ${player2},
-      (select coalesce(max(seed), 0) + 1 from teams where category_id = ${categoryId}))`;
+    insert into teams (category_id, player1, player2, seed, athlete1_id, athlete2_id)
+    values (${categoryId}, ${fullName(a1)}, ${fullName(a2)},
+      (select coalesce(max(seed), 0) + 1 from teams where category_id = ${categoryId}), ${a1.id}, ${a2.id})`;
   refresh(categoryId);
   return { ok: true };
 }
 
 /** Reordena la siembra: `orderedIds[0]` queda como sembrado 1. */
 export async function reorderTeams(categoryId: string, orderedIds: string[]): Promise<Result> {
-  await requireAdmin();
+  await requirePermission("tournament.edit", { categoryId });
   assertId(categoryId);
   if (!Array.isArray(orderedIds) || !orderedIds.every(isUuid)) return fail("Lista inválida");
   const blocked = await formatLocked(categoryId);
@@ -141,7 +218,7 @@ export async function reorderTeams(categoryId: string, orderedIds: string[]): Pr
 }
 
 export async function deleteTeam(categoryId: string, teamId: string): Promise<Result> {
-  await requireAdmin();
+  await requirePermission("tournament.edit", { categoryId });
   assertId(categoryId);
   assertId(teamId);
   const blocked = await formatLocked(categoryId);
@@ -164,7 +241,7 @@ export async function deleteTeam(categoryId: string, teamId: string): Promise<Re
 // ───────── Formato ─────────
 
 export async function saveFormat(categoryId: string, formatJson: string): Promise<Result> {
-  await requireAdmin();
+  await requirePermission("tournament.edit", { categoryId });
   assertId(categoryId);
   const view = await getCategoryView(categoryId, { includeDrafts: true });
   if (!view) return fail("Categoría no encontrada");
@@ -194,7 +271,7 @@ export async function saveFormat(categoryId: string, formatJson: string): Promis
 
 /** Borra formato, resultados y programación (las duplas se mantienen). */
 export async function resetFormat(categoryId: string): Promise<Result> {
-  await requireAdmin();
+  await requirePermission("tournament.edit", { categoryId });
   assertId(categoryId);
   await sql.begin(async (tx) => {
     await tx`delete from results where category_id = ${categoryId}`;
@@ -216,7 +293,7 @@ export async function saveResult(
   matchKey: string,
   result: { sets: SetScore[]; walkoverWinner?: string } | null,
 ): Promise<Result> {
-  const admin = await requireAdmin();
+  const admin = await requirePermission("results.edit", { categoryId });
   assertId(categoryId);
   const view = await getCategoryView(categoryId, { includeDrafts: true });
   if (!view?.category.format || !view.category.generated || !view.state) return fail("La categoría no tiene formato");
@@ -282,7 +359,7 @@ export async function saveSchedule(
   court: string,
   scheduledAt: string | null,
 ): Promise<Result> {
-  await requireAdmin();
+  await requirePermission("results.edit", { categoryId });
   assertId(categoryId);
   const when = scheduledAt ? new Date(scheduledAt) : null;
   if (when && Number.isNaN(when.getTime())) return fail("Fecha inválida");

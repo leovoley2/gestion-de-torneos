@@ -33,7 +33,8 @@ export function emailLayout(title: string, paragraphs: string[], button?: { labe
   </td></tr></table></body></html>`;
 }
 
-export async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }): Promise<void> {
+export async function sendEmail({ to, subject, html }: { to: string | null; subject: string; html: string }): Promise<void> {
+  if (!to) return; // ficha sin cuenta: no hay a quién escribir
   if (!isEmailEnabled()) {
     await sql`insert into email_outbox (to_email, subject, html) values (${to}, ${subject}, ${html})`;
     const link = html.match(/href="([^"]+)"/)?.[1];

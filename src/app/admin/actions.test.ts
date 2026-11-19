@@ -48,7 +48,7 @@ const argsFor = (arity: number) =>
   Array.from({ length: Math.max(arity, 3) }, (_, i) => (i === 0 ? ID : i === 1 ? form() : ID));
 
 // Se importan una sola vez, antes de los tests (al importar se arman fragmentos SQL que no cuentan).
-const modules = [await import("./actions"), await import("./registration-actions")];
+const modules = [await import("./actions"), await import("./registration-actions"), await import("./team-actions"), await import("./ranking-actions")];
 async function allActions() {
   return modules.flatMap((mod) =>
     Object.entries(mod).filter(([, v]) => typeof v === "function"),
@@ -93,7 +93,7 @@ describe("acciones de administrador", () => {
       await expect(fn(...argsFor(fn.length)), name).rejects.toThrow("Solo los administradores");
     }
     expect(sqlCalls.length).toBeGreaterThan(0);
-    expect(sqlCalls.every((q) => q.startsWith("select id, email from admins"))).toBe(true);
+    expect(sqlCalls.every((q) => q.startsWith("select id, email, name from admins"))).toBe(true);
   });
 
   it("una sesión de ATLETA puesta en la cookie de admin no sirve", async () => {

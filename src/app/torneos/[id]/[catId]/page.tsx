@@ -5,6 +5,7 @@ import type { ResolvedMatch } from "@/lib/engine";
 import { MatchCard, StageView, makeDescribe, type Helpers } from "@/components/StageView";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { Tabs } from "@/components/Tabs";
+import { teamRankingPoints } from "@/lib/ranking";
 import { SiteFooter, SiteHeader } from "@/components/Brand";
 
 // En caché (CDN de Vercel): miles de visitas no tocan la base de datos. Cada cambio de un
@@ -28,6 +29,7 @@ export default async function PublicCategory({ params }: { params: Promise<{ id:
   if (!view || view.tournament.id !== id) notFound();
   const { category, tournament, teams, teamRefs, state, schedule } = view;
 
+  const pairPoints = category.ranking_id ? await teamRankingPoints(category.ranking_id, teams) : null;
   const names = new Map(teamRefs.map((t) => [t.id, t.name]));
   const teamName = (tid: string | null) => (tid ? (names.get(tid) ?? "—") : "—");
   const helpers: Helpers | null = category.generated
@@ -167,6 +169,11 @@ export default async function PublicCategory({ params }: { params: Promise<{ id:
                       <span className="font-medium text-navy-900">{t.player1}</span>
                       <span className="text-navy-200">/</span>
                       <span className="font-medium text-navy-900">{t.player2}</span>
+                      {pairPoints && (
+                        <span className="ml-auto text-xs font-semibold text-navy-500 tabular-nums">
+                          {Number.isInteger(pairPoints[t.id]) ? pairPoints[t.id] : pairPoints[t.id]?.toFixed(1)} pts
+                        </span>
+                      )}
                     </li>
                   ))}
                   {teams.length === 0 && <li className="px-5 py-4 text-navy-400">Aún no hay duplas inscritas.</li>}

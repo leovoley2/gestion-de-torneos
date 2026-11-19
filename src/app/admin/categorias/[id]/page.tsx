@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { GENDER_LABEL, getCategoryView } from "@/lib/data";
 import { requireAdmin } from "@/lib/auth";
+import { can } from "@/lib/permissions";
 import { StageView, makeDescribe } from "@/components/StageView";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { PageTitle } from "@/components/AdminUI";
@@ -10,13 +11,21 @@ import { TeamsManager } from "./TeamsManager";
 import { FormatBuilder } from "./FormatBuilder";
 import { ResultsEditor } from "./ResultsEditor";
 import { RegistrationsSection } from "./Registrations";
+import { RankingPanel } from "./RankingPanel";
+import { teamRankingPoints } from "@/lib/ranking";
 
 export default async function AdminCategory({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await requireAdmin();
+  const admin = await requireAdmin();
   const view = await getCategoryView(id, { includeDrafts: true });
   if (!view) notFound();
   const { category, tournament, teams, teamRefs, state, schedule } = view;
+  const canEdit = can(admin.grants, "tournament.edit", tournament.id);
+  const canResults = can(admin.grants, "results.edit", tournament.id);
+  const canReview = can(admin.grants, "registrations.review", tournament.id);
+  if (!canEdit && !canResults && !canReview) notFound();
+  // Puntos de ranking de cada dupla (suma de sus dos jugadores) para mostrar y ordenar la siembra.
+  const points = category.ranking_id ? await teamRankingPoints(category.ranking_id, teams) : undefined;
   const hasFormat = Boolean(category.format && category.generated && state);
 
   const teamNames = Object.fromEntries(teamRefs.map((t) => [t.id, t.name]));
@@ -82,14 +91,17 @@ export default async function AdminCategory({ params }: { params: Promise<{ id: 
       {hasFormat && state && category.format && category.generated ? (
         <div className="grid items-start gap-6 xl:grid-cols-[1fr_340px]">
           <div className="min-w-0 space-y-6">
-            <ResultsEditor
-              categoryId={category.id}
-              format={category.format}
-              matches={state.matches}
-              teamNames={teamNames}
-              describe={describeByMatch}
-              schedule={schedule}
-            />
+            {canResults && (
+              <ResultsEditor
+                categoryId={category.id}
+                format={category.format}
+                matches={state.matches}
+                teamNames={teamNames}
+                describe={describeByMatch}
+                schedule={schedule}
+              />
+            )}
+            <RankingPanel view={view} canEdit={canEdit} />
             {category.format.stages.map((s) => (
               <StageView
                 key={s.key}
@@ -105,7 +117,8 @@ export default async function AdminCategory({ params }: { params: Promise<{ id: 
             ))}
           </div>
           <aside className="space-y-6 xl:sticky xl:top-24">
-            <TeamsManager categoryId={category.id} teams={teams} locked />
+            <TeamsManager categoryId={category.id} teams={teams} locked points={points} />
+            {canEdit && (
             <DangerZone>
               <ConfirmButton
                 action={resetFormat.bind(null, category.id)}
@@ -120,25 +133,30 @@ export default async function AdminCategory({ params }: { params: Promise<{ id: 
                 Eliminar categoría
               </ConfirmButton>
             </DangerZone>
+            )}
           </aside>
         </div>
       ) : (
         <>
-          <RegistrationsSection categoryId={category.id} editable />
-          <TeamsManager categoryId={category.id} teams={teams} locked={false} />
-          {teams.length >= 2 ? (
-            <FormatBuilder categoryId={category.id} teams={teamRefs} />
-          ) : (
-            <p className="card text-sm text-navy-400">Agrega al menos 2 duplas para configurar el formato.</p>
+          <RegistrationsSection categoryId={category.id} editable={canEdit} canReview={canReview} />
+          <TeamsManager categoryId={category.id} teams={teams} locked={!canEdit} points={points} />
+          <RankingPanel view={view} canEdit={canEdit} />
+          {canEdit &&
+            (teams.length >= 2 ? (
+              <FormatBuilder categoryId={category.id} teams={teamRefs} />
+            ) : (
+              <p className="card text-sm text-navy-400">Agrega al menos 2 duplas para configurar el formato.</p>
+            ))}
+          {canEdit && (
+            <DangerZone>
+              <ConfirmButton
+                action={deleteCategory.bind(null, category.id, tournament.id)}
+                message="¿Eliminar la categoría con sus duplas y resultados?"
+              >
+                Eliminar categoría
+              </ConfirmButton>
+            </DangerZone>
           )}
-          <DangerZone>
-            <ConfirmButton
-              action={deleteCategory.bind(null, category.id, tournament.id)}
-              message="¿Eliminar la categoría con sus duplas y resultados?"
-            >
-              Eliminar categoría
-            </ConfirmButton>
-          </DangerZone>
         </>
       )}
     </div>

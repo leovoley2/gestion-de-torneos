@@ -2,7 +2,7 @@
 
 export interface Athlete {
   id: string;
-  email: string;
+  email: string | null; // null = ficha creada por la organización (sin cuenta)
   email_verified_at: Date | string | null;
   first_name: string;
   last_name: string;

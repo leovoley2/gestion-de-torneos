@@ -1,20 +1,24 @@
+import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
+import { can } from "@/lib/permissions";
 import { fullName, isMinor, profileIssues, type Athlete } from "@/lib/athletes";
 import { sql } from "@/lib/db";
 import { isEmailEnabled } from "@/lib/email";
 import { PageTitle } from "@/components/AdminUI";
-import { AthleteAccessButtons } from "./AthleteAccessButtons";
+import { AthleteAccessButtons, MergeRecordForm } from "./AthleteAccessButtons";
 
 export const metadata = { title: "Atletas · Panel" };
 
 export default async function AdminAthletes({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  await requireAdmin();
+  const admin = await requireAdmin();
+  if (!can(admin.grants, "athletes.support")) notFound();
+  const canMerge = can(admin.grants, "ranking.manage");
   const q = ((await searchParams).q ?? "").trim().slice(0, 80);
   const like = `%${q.replace(/[%_\\]/g, "\\$&")}%`;
   const athletes = await sql<(Athlete & { registrations: number })[]>`
     select a.*, (select count(*)::int from registrations r where r.athlete1_id = a.id or r.athlete2_id = a.id) as registrations
     from athletes a
-    where ${q === ""} or a.email ilike ${like} or a.document_number ilike ${like}
+    where ${q === ""} or coalesce(a.email, '') ilike ${like} or a.document_number ilike ${like}
       or (a.first_name || ' ' || a.last_name) ilike ${like}
     order by a.created_at desc limit 100`;
 
@@ -44,8 +48,8 @@ export default async function AdminAthletes({ searchParams }: { searchParams: Pr
                   {isMinor(a) && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">Menor</span>}
                 </p>
                 <p className="text-sm text-navy-400">
-                  {a.email}
-                  {a.email_verified_at ? "" : " · correo sin confirmar"}
+                  {a.email ?? <span className="font-semibold text-navy-600">Ficha sin cuenta</span>}
+                  {a.email && !a.email_verified_at ? " · correo sin confirmar" : ""}
                   {a.document_number && ` · ${a.document_type} ${a.document_number}`}
                   {a.phone && ` · ${a.phone}`}
                 </p>
@@ -54,7 +58,11 @@ export default async function AdminAthletes({ searchParams }: { searchParams: Pr
                   {a.registrations === 1 ? "inscripción" : "inscripciones"}
                 </p>
               </div>
-              <AthleteAccessButtons athleteId={a.id} verified={Boolean(a.email_verified_at)} />
+              {a.email ? (
+                <AthleteAccessButtons athleteId={a.id} verified={Boolean(a.email_verified_at)} />
+              ) : canMerge ? (
+                <MergeRecordForm recordId={a.id} />
+              ) : null}
             </li>
           );
         })}

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { GENDER_LABEL, isUuid, type Category, type Tournament } from "@/lib/data";
 import { requireAdmin } from "@/lib/auth";
+import { can, visibleTournaments } from "@/lib/permissions";
 import { sql } from "@/lib/db";
 import { createCategory, deleteTournament, setPublished, updateTournament } from "../../actions";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -16,8 +17,11 @@ const STATUS = {
 
 export default async function AdminTournament({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await requireAdmin();
+  const admin = await requireAdmin();
   if (!isUuid(id)) notFound();
+  const visible = visibleTournaments(admin.grants);
+  if (visible !== null && !visible.includes(id)) notFound();
+  const canEdit = can(admin.grants, "tournament.edit", id);
   const [t] = await sql<Tournament[]>`select * from tournaments where id = ${id}`;
   if (!t) notFound();
   const categories = await sql<(Pick<Category, "id" | "name" | "gender" | "status"> & { teams: number })[]>`
@@ -40,9 +44,11 @@ export default async function AdminTournament({ params }: { params: Promise<{ id
                 Ver público ↗
               </Link>
             )}
-            <form action={setPublished.bind(null, t.id, !t.published)}>
-              <button className={t.published ? "btn" : "btn-primary"}>{t.published ? "Despublicar" : "Publicar"}</button>
-            </form>
+            {canEdit && (
+              <form action={setPublished.bind(null, t.id, !t.published)}>
+                <button className={t.published ? "btn" : "btn-primary"}>{t.published ? "Despublicar" : "Publicar"}</button>
+              </form>
+            )}
           </>
         }
       >
@@ -78,6 +84,7 @@ export default async function AdminTournament({ params }: { params: Promise<{ id
             })}
             {categories.length === 0 && <li className="text-sm text-navy-400">Todavía no hay categorías.</li>}
           </ul>
+          {canEdit && (
           <form
             action={createCategory.bind(null, t.id)}
             className="mt-5 flex flex-wrap items-end gap-2 border-t border-navy-50 pt-5"
@@ -93,8 +100,10 @@ export default async function AdminTournament({ params }: { params: Promise<{ id
             </select>
             <button className="btn-primary">Agregar</button>
           </form>
+          )}
         </section>
 
+        {canEdit && (
         <div className="space-y-6">
           <form action={updateTournament.bind(null, t.id)} className="card space-y-4">
             <SectionTitle title="Datos del torneo" />
@@ -130,6 +139,7 @@ export default async function AdminTournament({ params }: { params: Promise<{ id
             </ConfirmButton>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

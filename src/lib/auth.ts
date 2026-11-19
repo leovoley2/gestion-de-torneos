@@ -2,24 +2,60 @@ import "server-only";
 import { cookies, headers } from "next/headers";
 import { sql } from "@/lib/db";
 import { verifyPassword } from "@/lib/password";
+import { can, type Permission, type RoleGrant } from "@/lib/permissions";
 import { SESSION_COOKIE, SESSION_DAYS, readSession, signSession } from "@/lib/session";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface Admin {
   id: string;
   email: string;
+  name: string | null;
+  grants: RoleGrant[];
 }
 
-/** Admin de la sesión actual, o null. Se consulta la base: borrar un admin revoca su sesión. */
+/**
+ * Miembro del equipo de la sesión actual (con sus roles), o null. Se consulta la base: borrar a
+ * alguien o quitarle todos sus roles revoca su acceso de inmediato.
+ */
 export async function getAdmin(): Promise<Admin | null> {
   const id = await readSession((await cookies()).get(SESSION_COOKIE)?.value, "admin");
   if (!id) return null;
-  const [admin] = await sql<Admin[]>`select id, email from admins where id = ${id}`;
-  return admin ?? null;
+  const [admin] = await sql<Omit<Admin, "grants">[]>`select id, email, name from admins where id = ${id}`;
+  if (!admin) return null;
+  const grants = await sql<RoleGrant[]>`select role, tournament_id from admin_roles where admin_id = ${id}`;
+  if (grants.length === 0) return null;
+  return { ...admin, grants: [...grants] };
 }
 
 export async function requireAdmin(): Promise<Admin> {
   const admin = await getAdmin();
   if (!admin) throw new Error("Solo los administradores pueden hacer cambios");
+  return admin;
+}
+
+/**
+ * Exige un permiso. El alcance puede ser un torneo o una categoría (se busca su torneo).
+ * Primero exige sesión del equipo; luego el rol adecuado para ese torneo.
+ */
+export async function requirePermission(
+  permission: Permission,
+  scope: { tournamentId?: string; categoryId?: string; registrationId?: string } = {},
+): Promise<Admin> {
+  const admin = await requireAdmin();
+  for (const id of [scope.tournamentId, scope.categoryId, scope.registrationId]) {
+    if (id !== undefined && !UUID.test(id)) throw new Error("Identificador inválido");
+  }
+  let tournamentId = scope.tournamentId;
+  if (scope.categoryId || scope.registrationId) {
+    const [c] = scope.categoryId
+      ? await sql<{ tournament_id: string }[]>`select tournament_id from categories where id = ${scope.categoryId}`
+      : await sql<{ tournament_id: string }[]>`
+          select c.tournament_id from registrations r join categories c on c.id = r.category_id where r.id = ${scope.registrationId!}`;
+    if (!c) throw new Error("No encontrado");
+    tournamentId = c.tournament_id;
+  }
+  if (!can(admin.grants, permission, tournamentId)) throw new Error("No tienes permiso para esta acción");
   return admin;
 }
 

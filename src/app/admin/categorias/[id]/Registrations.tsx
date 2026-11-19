@@ -10,7 +10,15 @@ const toLocalInput = (d: Date | string | null) => {
 };
 
 /** Inscripciones de la categoría: ajustes (abrir/cerrar, plazo, cupo, años) y revisión de duplas. */
-export async function RegistrationsSection({ categoryId, editable }: { categoryId: string; editable: boolean }) {
+export async function RegistrationsSection({
+  categoryId,
+  editable,
+  canReview,
+}: {
+  categoryId: string;
+  editable: boolean; // ajustes de inscripción (organizador)
+  canReview: boolean; // aceptar / rechazar (organizador o inscripciones)
+}) {
   const [category, registrations] = await Promise.all([getRegCategory(categoryId), getCategoryRegistrations(categoryId)]);
   if (!category) return null;
   const toReview = registrations.filter((r) => r.status === "pending_review").length;
@@ -31,7 +39,11 @@ export async function RegistrationsSection({ categoryId, editable }: { categoryI
         </div>
       </div>
 
-      {editable ? (
+      {category.has_format ? (
+        <p className="rounded-lg bg-navy-50 px-3 py-2 text-sm text-navy-500">
+          El formato ya está generado: no entran nuevas duplas. Para aceptar más, reinicia el formato.
+        </p>
+      ) : editable ? (
         <RegistrationSettingsForm
           categoryId={category.id}
           initial={{
@@ -42,15 +54,11 @@ export async function RegistrationsSection({ categoryId, editable }: { categoryI
             maxYear: category.max_birth_year?.toString() ?? "",
           }}
         />
-      ) : (
-        <p className="rounded-lg bg-navy-50 px-3 py-2 text-sm text-navy-500">
-          El formato ya está generado: no entran nuevas duplas. Para aceptar más, reinicia el formato.
-        </p>
-      )}
+      ) : null}
 
       <ul className="space-y-3">
         {active.map((r) => (
-          <RegistrationCard key={r.id} reg={r} editable={editable} />
+          <RegistrationCard key={r.id} reg={r} editable={canReview && !category.has_format} />
         ))}
         {active.length === 0 && <li className="text-sm text-navy-400">No hay inscripciones pendientes.</li>}
       </ul>

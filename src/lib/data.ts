@@ -26,6 +26,8 @@ export interface Category {
   status: "setup" | "in_progress" | "finished";
   format: FormatDefinition | null;
   generated: GeneratedFormat | null;
+  ranking_id: string | null;
+  point_table_id: string | null;
 }
 
 export interface Team {
@@ -34,6 +36,8 @@ export interface Team {
   player1: string;
   player2: string;
   seed: number;
+  athlete1_id: string | null;
+  athlete2_id: string | null;
 }
 
 export interface ScheduleRow {
@@ -70,7 +74,7 @@ export async function getCategoryView(
   if (!tournament || (!tournament.published && !includeDrafts)) return null;
 
   const [teams, results, schedule] = await Promise.all([
-    sql<Team[]>`select id, category_id, player1, player2, seed from teams where category_id = ${categoryId} order by seed`,
+    sql<Team[]>`select id, category_id, player1, player2, seed, athlete1_id, athlete2_id from teams where category_id = ${categoryId} order by seed`,
     sql<{ match_key: string; sets: MatchResult["sets"]; walkover_winner: string | null }[]>`
       select match_key, sets, walkover_winner from results where category_id = ${categoryId}`,
     sql<ScheduleRow[]>`select match_key, court, scheduled_at from schedule where category_id = ${categoryId}`,

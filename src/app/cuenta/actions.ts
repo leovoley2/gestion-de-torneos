@@ -62,7 +62,15 @@ export async function updateProfile(_: Result | null, fd: FormData): Promise<Res
         updated_at = now()
       where id = ${me.id}`;
   } catch (e) {
-    if ((e as { code?: string }).code === "23505") return fail("Ese documento ya está registrado en otra cuenta");
+    if ((e as { code?: string }).code === "23505") {
+      const [owner] = await sql<{ email: string | null }[]>`
+        select email from athletes where document_type = ${documentType} and document_number = ${documentNumber}`;
+      return fail(
+        owner && !owner.email
+          ? "La organización ya tiene una ficha con ese documento (con tus resultados). Pídele que la una a tu cuenta; mientras tanto deja el documento vacío."
+          : "Ese documento ya está registrado en otra cuenta",
+      );
+    }
     throw e;
   }
   revalidatePath("/cuenta", "layout");
@@ -80,7 +88,7 @@ export async function resendVerification(): Promise<Result> {
 
 // ───────── Inscripciones ─────────
 
-const label = (a: Athlete) => fullName(a) || a.email;
+const label = (a: Athlete) => fullName(a) || a.email || "Atleta";
 
 export async function createRegistration(_: Result | null, fd: FormData): Promise<Result> {
   const me = await requireAthlete();
@@ -101,6 +109,9 @@ export async function createRegistration(_: Result | null, fd: FormData): Promis
     return fail("No encontramos a tu compañero. Debe crear su cuenta y darte el correo o documento con el que se registró.");
   }
   if (partner.id === me.id) return fail("Tu compañero debe ser otra persona");
+  if (!partner.email) {
+    return fail("Tu compañero todavía no tiene cuenta: debe registrarse para poder confirmar la inscripción.");
+  }
 
   const conflict = await activeRegistrationConflict(categoryId, [me.id, partner.id]);
   if (conflict) {

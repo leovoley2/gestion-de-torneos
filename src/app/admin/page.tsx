@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
+import { can, visibleTournaments } from "@/lib/permissions";
 import { sql } from "@/lib/db";
 import type { Tournament } from "@/lib/data";
 import { formatRange } from "@/lib/format";
@@ -9,12 +10,16 @@ import { createTournament } from "./actions";
 export const metadata = { title: "Panel · Torneos Vóley Playa" };
 
 export default async function AdminHome() {
-  await requireAdmin();
+  const admin = await requireAdmin();
+  const visible = visibleTournaments(admin.grants);
+  const canCreate = can(admin.grants, "tournament.create");
   const tournaments = await sql<(Tournament & { categories: number; results: number })[]>`
     select t.*,
       (select count(*)::int from categories where tournament_id = t.id) as categories,
       (select count(*)::int from results r join categories c on c.id = r.category_id where c.tournament_id = t.id) as results
-    from tournaments t order by start_date desc nulls first, created_at desc`;
+    from tournaments t
+    where ${visible === null} or t.id = any(${visible ?? []}::uuid[])
+    order by start_date desc nulls first, created_at desc`;
   const published = tournaments.filter((t) => t.published).length;
   const results = tournaments.reduce((n, t) => n + t.results, 0);
 
@@ -62,6 +67,7 @@ export default async function AdminHome() {
           )}
         </section>
 
+        {canCreate && (
         <form action={createTournament} className="card space-y-4 lg:sticky lg:top-24">
           <h2 className="font-semibold text-navy-900">Nuevo torneo</h2>
           <label className="block text-sm">
@@ -85,6 +91,7 @@ export default async function AdminHome() {
           <button className="btn-primary w-full py-2.5">Crear torneo</button>
           <p className="text-xs text-navy-400">Se crea como borrador: nadie lo ve hasta que lo publiques.</p>
         </form>
+        )}
       </div>
     </div>
   );
