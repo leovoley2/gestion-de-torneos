@@ -9,6 +9,7 @@ import { deleteCategory, resetFormat } from "@/app/admin/actions";
 import { TeamsManager } from "./TeamsManager";
 import { FormatBuilder } from "./FormatBuilder";
 import { ResultsEditor } from "./ResultsEditor";
+import { RegistrationsSection } from "./Registrations";
 
 export default async function AdminCategory({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -123,6 +124,7 @@ export default async function AdminCategory({ params }: { params: Promise<{ id: 
         </div>
       ) : (
         <>
+          <RegistrationsSection categoryId={category.id} editable />
           <TeamsManager categoryId={category.id} teams={teams} locked={false} />
           {teams.length >= 2 ? (
             <FormatBuilder categoryId={category.id} teams={teamRefs} />

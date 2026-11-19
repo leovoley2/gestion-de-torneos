@@ -147,6 +147,10 @@ export async function deleteTeam(categoryId: string, teamId: string): Promise<Re
   const blocked = await formatLocked(categoryId);
   if (blocked) return fail(blocked);
   await sql.begin(async (tx) => {
+    // Si la dupla vino de una inscripción, la inscripción queda como retirada por la organización.
+    await tx`
+      update registrations set status = 'withdrawn', admin_note = 'Retirada por la organización'
+      where team_id = ${teamId} and status = 'accepted'`;
     await tx`delete from teams where id = ${teamId} and category_id = ${categoryId}`;
     await tx`
       update teams t set seed = r.n

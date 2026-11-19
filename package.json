@@ -15,6 +15,7 @@
     "admin:create:prod": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --env-file=.env.production.local scripts/create-admin.mjs"
   },
   "dependencies": {
+    "@vercel/blob": "^2.8.2",
     "jose": "^5.9.6",
     "next": "^15.5.27",
     "postgres": "^3.4.5",

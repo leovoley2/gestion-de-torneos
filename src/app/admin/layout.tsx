@@ -18,7 +18,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             </span>
           </Link>
           <nav className="flex items-center gap-1 text-sm">
-            <Link href="/" className="btn-ghost px-3 py-1.5 text-xs font-medium">
+            <Link href="/admin" className="btn-ghost px-3 py-1.5 text-xs font-medium">
+              Torneos
+            </Link>
+            <Link href="/admin/atletas" className="btn-ghost px-3 py-1.5 text-xs font-medium">
+              Atletas
+            </Link>
+            <Link href="/" className="btn-ghost hidden px-3 py-1.5 text-xs font-medium sm:inline-flex">
               Sitio público ↗
             </Link>
             <span className="hidden px-2 text-xs text-sky-200/80 md:inline">{admin.email}</span>

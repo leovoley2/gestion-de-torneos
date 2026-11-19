@@ -2,7 +2,8 @@ import { SignJWT } from "jose";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Comprueba que NINGUNA acción de administrador se ejecute sin una sesión válida de un admin
-// existente. Recorre todas las exportaciones de actions.ts: una acción nueva queda cubierta sola.
+// existente. Recorre todas las exportaciones de actions.ts y registration-actions.ts: una acción
+// nueva queda cubierta sola.
 
 process.env.AUTH_SECRET = "x".repeat(40);
 
@@ -11,6 +12,7 @@ const sqlCalls: string[] = [];
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({
+  headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) => (cookieJar.has(name) ? { name, value: cookieJar.get(name) } : undefined),
     set: vi.fn(),
@@ -45,13 +47,16 @@ const form = () => {
 const argsFor = (arity: number) =>
   Array.from({ length: Math.max(arity, 3) }, (_, i) => (i === 0 ? ID : i === 1 ? form() : ID));
 
+// Se importan una sola vez, antes de los tests (al importar se arman fragmentos SQL que no cuentan).
+const modules = [await import("./actions"), await import("./registration-actions")];
 async function allActions() {
-  const mod = await import("./actions");
-  return Object.entries(mod).filter(([, v]) => typeof v === "function") as [string, (...a: unknown[]) => Promise<unknown>][];
+  return modules.flatMap((mod) =>
+    Object.entries(mod).filter(([, v]) => typeof v === "function"),
+  ) as [string, (...a: unknown[]) => Promise<unknown>][];
 }
 
-const sessionToken = (secret: string, sub: string) =>
-  new SignJWT({})
+const sessionToken = (secret: string, sub: string, claims: Record<string, unknown> = {}) =>
+  new SignJWT(claims)
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(sub)
     .setExpirationTime("1h")
@@ -89,5 +94,13 @@ describe("acciones de administrador", () => {
     }
     expect(sqlCalls.length).toBeGreaterThan(0);
     expect(sqlCalls.every((q) => q.startsWith("select id, email from admins"))).toBe(true);
+  });
+
+  it("una sesión de ATLETA puesta en la cookie de admin no sirve", async () => {
+    cookieJar.set("torneos_session", await sessionToken(process.env.AUTH_SECRET!, ID, { typ: "athlete" }));
+    for (const [name, fn] of await allActions()) {
+      await expect(fn(...argsFor(fn.length)), name).rejects.toThrow("Solo los administradores");
+    }
+    expect(sqlCalls).toEqual([]);
   });
 });

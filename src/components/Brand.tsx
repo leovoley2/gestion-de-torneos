@@ -44,9 +44,14 @@ export function SiteHeader({ children }: { children?: React.ReactNode }) {
         <Link href="/" className="rounded-lg outline-offset-4">
           <Wordmark dark />
         </Link>
-        <Link href="/admin" className="btn-ghost px-3 py-1.5 text-xs font-medium">
-          Administradores
-        </Link>
+        <nav className="flex items-center gap-1">
+          <Link href="/cuenta" className="btn-ghost px-3 py-1.5 text-xs font-semibold text-white">
+            Soy atleta
+          </Link>
+          <Link href="/admin" className="btn-ghost hidden px-3 py-1.5 text-xs font-medium sm:inline-flex">
+            Organización
+          </Link>
+        </nav>
       </div>
       {children && <div className="mx-auto max-w-6xl px-4 pt-6 pb-10 sm:px-6 sm:pt-10 sm:pb-14">{children}</div>}
     </header>

@@ -36,22 +36,46 @@ En el hosting (Vercel/Netlify) se cargan las mismas variables `DATABASE_URL` y `
 
 - La base de datos solo la conoce el servidor (`DATABASE_URL` nunca llega al navegador).
 - Las páginas públicas solo leen torneos **publicados**; un borrador responde 404 aunque se conozca el enlace.
-- Toda escritura pasa por `src/app/admin/actions.ts`, y cada acción empieza con `requireAdmin()`.
+- Escrituras de la organización: `src/app/admin/*actions.ts`, cada acción empieza con `requireAdmin()`.
+  Escrituras de atletas: `src/app/cuenta/actions.ts`, cada acción exige sesión de atleta y solo toca sus datos.
+  Las sesiones de atleta y de administrador son cookies distintas con tipo firmado: una no sirve por la otra.
   `actions.test.ts` llama a **todas** las acciones sin sesión, con una cookie falsificada y con la sesión
   de un admin borrado, y verifica que fallen sin tocar la base de datos.
 - Contraseñas con scrypt; sesión en cookie `httpOnly` firmada (HS256, 7 días). Borrar un admin revoca su sesión.
-- No hay registro público: los administradores se crean con `npm run admin:create`.
+- Los administradores no se registran solos: se crean con `npm run admin:create`. Los atletas sí crean su cuenta.
 
-| | Visitante / atleta (sin login) | Administrador |
+| | Visitante (sin login) | Atleta con cuenta | Administrador |
+|---|---|---|---|
+| Ver torneos publicados: duplas, programación, resultados, grupos y llaves | ✅ (se actualiza cada 10 s) | ✅ | ✅ |
+| Ver borradores | ❌ | ❌ | ✅ |
+| Editar su perfil, inscribirse con su dupla, subir su declaración jurada | ❌ | ✅ (solo lo suyo) | — |
+| Aceptar o rechazar inscripciones, ver PDFs de menores | ❌ | ❌ (solo su propio PDF) | ✅ |
+| Crear/editar torneos, duplas, formato, resultados, programación | ❌ | ❌ | ✅ |
+
+## Cuentas de atletas e inscripciones
+
+- Los atletas crean su cuenta en `/cuenta/registro`, completan su perfil y se inscriben con su dupla:
+  uno invita (por correo o documento) y el compañero confirma desde su cuenta.
+- Menores de 18 años (a la fecha del torneo): el perfil pide los datos del apoderado y cada inscripción
+  exige la declaración jurada en PDF (máx. 5 MB, se valida que sea un PDF real).
+- La organización abre/cierra inscripciones por categoría (plazo, cupo, años de nacimiento) y acepta o
+  rechaza cada dupla. Al aceptar, la dupla entra a la lista de la categoría.
+- Reglas que se verifican: rama (F/M/mixta), años de nacimiento, perfil completo, sin inscripciones
+  duplicadas en la categoría y declaraciones de menores.
+
+### Variables de entorno adicionales
+
+| Variable | Para qué | Sin configurar |
 |---|---|---|
-| Ver torneos publicados: duplas, programación, resultados, grupos y llaves | ✅ (se actualiza cada 10 s) | ✅ |
-| Ver borradores | ❌ | ✅ |
-| Crear/editar torneos, duplas, formato, resultados, programación | ❌ | ✅ |
+| `BLOB_READ_WRITE_TOKEN` | PDFs en Vercel Blob privado (ya conectado en Vercel) | se guardan en `web/.uploads/` (solo desarrollo) |
+| `RESEND_API_KEY`, `EMAIL_FROM` | Envío de correos (requiere dominio propio verificado en Resend) | los correos se guardan en `email_outbox`; en desarrollo se ven en `/dev/correos`. No se exige confirmar el correo y la organización genera enlaces de contraseña desde `/admin/atletas` |
+| `APP_URL` | URL base de los enlaces en correos | usa la URL de Vercel o `http://localhost:3000` |
 
 ## Rutas
 
-- `/` torneos publicados · `/torneos/[id]` categorías · `/torneos/[id]/[categoría]` partidos, grupos/llaves y duplas
-- `/login` · `/admin` panel (torneos → categorías → duplas, formato, resultados y programación)
+- `/` torneos publicados · `/torneos/[id]` categorías (botón "Inscribirme" si están abiertas) · `/torneos/[id]/[categoría]`
+- `/cuenta` área del atleta: perfil, inscripciones, invitaciones, declaración jurada
+- `/login` · `/admin` panel: torneos → categorías → inscripciones, duplas, formato, resultados · `/admin/atletas`
 - `/formatos` laboratorio de formatos con resultados simulados
 
 ## Motor de formatos (`src/lib/engine`)

@@ -25,3 +25,12 @@ describe("safeNext (destino después del login)", () => {
     expect(safeNext(null)).toBe("/admin");
   });
 });
+
+describe("safeNext para atletas (/cuenta)", () => {
+  it("acepta rutas de la cuenta y rechaza el panel o sitios externos", () => {
+    expect(safeNext("/cuenta/inscribirme?categoria=1", "/cuenta", "/cuenta")).toBe("/cuenta/inscribirme?categoria=1");
+    expect(safeNext("/admin", "/cuenta", "/cuenta")).toBe("/cuenta");
+    expect(safeNext("/\\evil.example", "/cuenta", "/cuenta")).toBe("/cuenta");
+    expect(safeNext("/cuentaevil", "/cuenta", "/cuenta")).toBe("/cuenta");
+  });
+});

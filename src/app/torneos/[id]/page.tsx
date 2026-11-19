@@ -29,8 +29,11 @@ export default async function PublicTournament({ params }: { params: Promise<{ i
   // Solo torneos publicados: un borrador responde 404 aunque se conozca el enlace.
   const [t] = await sql<Tournament[]>`select * from tournaments where id = ${id} and published`;
   if (!t) notFound();
-  const categories = await sql<(Pick<Category, "id" | "name" | "gender" | "status"> & { teams: number })[]>`
-    select c.id, c.name, c.gender, c.status, (select count(*)::int from teams where category_id = c.id) as teams
+  const categories = await sql<(Pick<Category, "id" | "name" | "gender" | "status"> & { teams: number; registering: boolean })[]>`
+    select c.id, c.name, c.gender, c.status, (select count(*)::int from teams where category_id = c.id) as teams,
+      (c.registration_open and c.format is null
+        and (c.registration_deadline is null or c.registration_deadline > now())
+        and (c.max_teams is null or c.max_teams > (select count(*) from teams where category_id = c.id))) as registering
     from categories c where c.tournament_id = ${id} order by c.created_at`;
   const phase = tournamentPhase(t.start_date, t.end_date);
   const when = formatRange(t.start_date, t.end_date);
@@ -54,8 +57,8 @@ export default async function PublicTournament({ params }: { params: Promise<{ i
           {categories.map((c, i) => {
             const s = STATUS[c.status as keyof typeof STATUS];
             return (
-              <li key={c.id} className="rise" style={{ "--i": i } as React.CSSProperties}>
-                <Link href={`/torneos/${t.id}/${c.id}`} className="card-link h-full">
+              <li key={c.id} className="rise flex flex-col gap-2" style={{ "--i": i } as React.CSSProperties}>
+                <Link href={`/torneos/${t.id}/${c.id}`} className="card-link flex-1">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="eyebrow">{GENDER_LABEL[c.gender as "F"]}</p>
@@ -67,6 +70,14 @@ export default async function PublicTournament({ params }: { params: Promise<{ i
                     {c.teams} {c.teams === 1 ? "dupla" : "duplas"}
                   </p>
                 </Link>
+                {c.registering && (
+                  <Link
+                    href={`/cuenta/inscribirme?categoria=${c.id}`}
+                    className="btn-primary w-full"
+                  >
+                    Inscripciones abiertas · Inscribirme
+                  </Link>
+                )}
               </li>
             );
           })}
