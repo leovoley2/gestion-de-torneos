@@ -166,9 +166,9 @@ export default async function PublicCategory({ params }: { params: Promise<{ id:
                       <span className="grid size-7 shrink-0 place-items-center rounded-full bg-sky-100 text-xs font-bold text-navy-800 tabular-nums">
                         {t.seed}
                       </span>
-                      <span className="font-medium text-navy-900">{t.player1}</span>
+                      <PlayerName id={t.athlete1_id} name={t.player1} />
                       <span className="text-navy-200">/</span>
-                      <span className="font-medium text-navy-900">{t.player2}</span>
+                      <PlayerName id={t.athlete2_id} name={t.player2} />
                       {pairPoints && (
                         <span className="ml-auto text-xs font-semibold text-navy-500 tabular-nums">
                           {Number.isInteger(pairPoints[t.id]) ? pairPoints[t.id] : pairPoints[t.id]?.toFixed(1)} pts
@@ -185,5 +185,16 @@ export default async function PublicCategory({ params }: { params: Promise<{ id:
       </main>
       <SiteFooter />
     </>
+  );
+}
+
+/** Nombre de un jugador; enlaza a su perfil si está vinculado a un atleta. */
+function PlayerName({ id, name }: { id: string | null; name: string }) {
+  return id ? (
+    <Link href={`/atletas/${id}`} className="font-medium text-navy-900 hover:text-sky-700">
+      {name}
+    </Link>
+  ) : (
+    <span className="font-medium text-navy-900">{name}</span>
   );
 }

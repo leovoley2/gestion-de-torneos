@@ -53,7 +53,12 @@ export default async function RankingPage({ params }: { params: Promise<{ id: st
                     {r.rank}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold text-navy-900">{r.name}</span>
+                    <Link
+                      href={`/atletas/${r.athleteId}`}
+                      className="block truncate font-semibold text-navy-900 hover:text-sky-700"
+                    >
+                      {r.name}
+                    </Link>
                     <span className="block truncate text-xs text-navy-400">
                       {[r.club, r.city].filter(Boolean).join(" · ") || " "}
                     </span>

@@ -8,13 +8,32 @@ import { getAthleteRegistrations, getOpenCategories, missingDeclarations } from 
 import { PageTitle } from "@/components/AdminUI";
 import { RegistrationBadge } from "@/components/RegistrationBadge";
 import { InvitationButtons } from "./RegistrationButtons";
+import { getParticipations } from "@/lib/athlete-profile";
+import { TeamMatchRow } from "@/components/TeamMatchRow";
 
 export const metadata = { title: "Mi cuenta · Vóley Playa" };
 
 export default async function AccountHome() {
   const me = await getAthlete();
   if (!me) redirect("/cuenta/ingresar");
-  const [registrations, open] = await Promise.all([getAthleteRegistrations(me.id), getOpenCategories()]);
+  const [registrations, open, participations] = await Promise.all([
+    getAthleteRegistrations(me.id),
+    getOpenCategories(),
+    getParticipations(me.id),
+  ]);
+  // Partidos de las categorías que todavía se juegan: los que faltan (por hora) y los últimos resultados.
+  const active = participations.filter((p) => p.category.status !== "finished");
+  const withContext = (p: (typeof active)[number], ms: typeof p.record.upcoming) =>
+    ms.map((m) => ({ m, p }));
+  const upcoming = active
+    .flatMap((p) => withContext(p, p.record.upcoming))
+    .filter(({ m }) => m.opponent !== null || m.scheduledAt)
+    .sort((a, b) => (a.m.scheduledAt ?? "9999").localeCompare(b.m.scheduledAt ?? "9999"))
+    .slice(0, 6);
+  const recent = active
+    .flatMap((p) => withContext(p, p.record.played))
+    .sort((a, b) => (b.m.scheduledAt ?? "").localeCompare(a.m.scheduledAt ?? ""))
+    .slice(0, 4);
   const missing = profileIssues(me);
   const invitations = registrations.filter((r) => r.status === "pending_partner" && r.athlete2.id === me.id);
   const others = registrations.filter((r) => !invitations.includes(r));
@@ -53,6 +72,48 @@ export default async function AccountHome() {
               </li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {(upcoming.length > 0 || recent.length > 0) && (
+        <section className="card p-3 sm:p-4">
+          <div className="mb-1 flex items-center justify-between gap-3 px-3 pt-1">
+            <h2 className="font-semibold text-navy-900">Mis partidos</h2>
+            <Link href={`/atletas/${me.id}`} className="text-sm font-medium text-sky-700 hover:text-sky-900">
+              Mi perfil público →
+            </Link>
+          </div>
+          {upcoming.length > 0 && (
+            <ul>
+              {upcoming.map(({ m, p }) => (
+                <li key={`${p.teamId}-${m.key}`}>
+                  <TeamMatchRow
+                    m={m}
+                    opponentName={m.opponent ? (p.names[m.opponent] ?? "—") : "Por definir"}
+                    context={active.length > 1 ? p.category.name : undefined}
+                    href={`/torneos/${p.tournament.id}/${p.category.id}`}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+          {recent.length > 0 && (
+            <>
+              <h3 className="mt-3 px-3 text-xs font-semibold text-navy-400">Últimos resultados</h3>
+              <ul>
+                {recent.map(({ m, p }) => (
+                  <li key={`${p.teamId}-${m.key}`}>
+                    <TeamMatchRow
+                      m={m}
+                      opponentName={m.opponent ? (p.names[m.opponent] ?? "—") : "—"}
+                      context={active.length > 1 ? p.category.name : undefined}
+                      href={`/torneos/${p.tournament.id}/${p.category.id}`}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </section>
       )}
 
