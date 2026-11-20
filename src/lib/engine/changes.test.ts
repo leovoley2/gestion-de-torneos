@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TEMPLATES, applyMatchRules, describeMatchRules, stageRules, generateFormat, resolveTournament, resultConflicts, type FormatDefinition, type MatchResult } from "./index";
+import { TEMPLATES, applyMatchRules, validateFormat, describeMatchRules, stageRules, generateFormat, resolveTournament, resultConflicts, type FormatDefinition, type MatchResult } from "./index";
 
 const T = (id: string) => TEMPLATES.find((t) => t.id === id)!;
 const teams = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `T${i + 1}`, name: "", seed: i + 1 }));
@@ -93,5 +93,25 @@ describe("tipo de partido elegido en el formato", () => {
     const issues = resultConflicts(before, setup(applyMatchRules(f, bo3, bo3)), results);
     expect(issues[0]).toMatch(/no cumple Mejor de 3/);
     expect(knockout).toBeDefined();
+  });
+});
+
+describe("validación del tipo de partido", () => {
+  const f = T("single_elimination").build({ teams: 8 });
+  const mode = (o: object) => applyMatchRules(f, { setsToWin: 1, setPoints: 21, decidingSetPoints: 15, ...o }, null);
+
+  it("acepta valores normales", () => {
+    expect(validateFormat(mode({}), 8)).toEqual([]);
+  });
+
+  it("rechaza puntos vacíos o en cero (harían válido un 2-0)", () => {
+    expect(validateFormat(mode({ setPoints: 0 }), 8)[0]).toMatch(/puntos del set/);
+    expect(validateFormat(mode({ setPoints: null }), 8)[0]).toMatch(/puntos del set/);
+    expect(validateFormat(mode({ setsToWin: 0 }), 8)[0]).toMatch(/1 set/);
+  });
+
+  it("también revisa las reglas propias de cada fase", () => {
+    const g = { ...f, stages: f.stages.map((s) => ({ ...s, rules: { match: { decidingSetPoints: 2 } } })) };
+    expect(validateFormat(g, 8)[0]).toMatch(/set decisivo/);
   });
 });

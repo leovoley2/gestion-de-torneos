@@ -1,6 +1,12 @@
 import { generateFormat } from "./generate";
+import { stageRules } from "./rules";
 import { simulateTournament } from "./simulate";
-import type { FormatDefinition, GeneratedFormat, Source, TeamRef } from "./types";
+import type {
+  FormatDefinition,
+  GeneratedFormat,
+  Source,
+  TeamRef,
+} from "./types";
 
 const sourceKey = (s: Source) => JSON.stringify(s);
 
@@ -9,7 +15,10 @@ const sourceKey = (s: Source) => JSON.stringify(s);
  * Devuelve mensajes en español (vacío = formato válido). Además de chequeos puntuales con
  * mensajes claros, simula el torneo entero: si algún partido nunca puede definirse, se rechaza.
  */
-export function validateFormat(format: FormatDefinition, teamCount: number): string[] {
+export function validateFormat(
+  format: FormatDefinition,
+  teamCount: number,
+): string[] {
   const errors: string[] = [];
   if (!format?.stages?.length) return ["El formato no tiene fases"];
 
@@ -21,16 +30,26 @@ export function validateFormat(format: FormatDefinition, teamCount: number): str
   }
   if (gen.matches.length === 0) return ["El formato no genera partidos"];
 
+  // Tipo de partido de cada fase: valores fuera de rango (o un campo vacío) harían válido cualquier marcador.
+  for (const stage of format.stages) {
+    const problem = matchRulesProblem(stageRules(format, stage).match);
+    if (problem) return [`Tipo de partido de "${stage.name}": ${problem}`];
+  }
+
   const groupSize = new Map(gen.groups.map((g) => [g.key, g.slots.length]));
   const groupName = new Map(gen.groups.map((g) => [g.key, g.name]));
   const stageName = new Map(format.stages.map((s) => [s.key, s.name]));
 
   const list = (names: string[]) =>
-    names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} y ${names[names.length - 1]}`;
+    names.length === 1
+      ? names[0]
+      : `${names.slice(0, -1).join(", ")} y ${names[names.length - 1]}`;
 
   // Grupos con menos de 2 duplas no tienen partidos y no pueden ordenar a nadie (un mensaje por fase).
   for (const stage of format.stages) {
-    const small = gen.groups.filter((g) => g.stageKey === stage.key && g.slots.length < 2).map((g) => g.name);
+    const small = gen.groups
+      .filter((g) => g.stageKey === stage.key && g.slots.length < 2)
+      .map((g) => g.name);
     if (small.length > 0) {
       errors.push(
         `${small.length === 1 ? `El grupo ${small[0]} queda` : `Los grupos ${list(small)} quedan`} con menos de 2 duplas en "${stageName.get(stage.key)}". Usa menos grupos.`,
@@ -40,7 +59,9 @@ export function validateFormat(format: FormatDefinition, teamCount: number): str
 
   // Referencias imposibles: sembrados que no existen, puestos que el grupo no tiene.
   const allSources: Source[] = [
-    ...gen.matches.flatMap((m) => [m.a, m.b].filter((s): s is Source => s !== null)),
+    ...gen.matches.flatMap((m) =>
+      [m.a, m.b].filter((s): s is Source => s !== null),
+    ),
     ...gen.groups.flatMap((g) => g.slots),
   ];
   const missingSeeds = new Set<number>();
@@ -53,19 +74,26 @@ export function validateFormat(format: FormatDefinition, teamCount: number): str
     }
   };
   for (const s of allSources) {
-    if (s.type === "seed" && (s.seed < 1 || s.seed > teamCount)) missingSeeds.add(s.seed);
+    if (s.type === "seed" && (s.seed < 1 || s.seed > teamCount))
+      missingSeeds.add(s.seed);
     if (s.type === "group_position") {
       const size = groupSize.get(s.groupKey);
-      if (size === undefined) once(`Se pide un puesto de un grupo que no existe (${s.groupKey}).`);
+      if (size === undefined)
+        once(`Se pide un puesto de un grupo que no existe (${s.groupKey}).`);
       else if (s.position > size) {
-        if (!missingPositions.has(s.position)) missingPositions.set(s.position, new Set());
+        if (!missingPositions.has(s.position))
+          missingPositions.set(s.position, new Set());
         missingPositions.get(s.position)!.add(groupName.get(s.groupKey)!);
       }
     }
     if (s.type === "ranking_position") {
-      const groups = gen.groups.filter((g) => g.stageKey === s.stageKey && g.slots.length >= s.position);
+      const groups = gen.groups.filter(
+        (g) => g.stageKey === s.stageKey && g.slots.length >= s.position,
+      );
       if (s.rank > groups.length) {
-        once(`Se pide el ${s.rank}º mejor ${s.position}º, pero solo ${groups.length} grupos tienen ${s.position}º puesto.`);
+        once(
+          `Se pide el ${s.rank}º mejor ${s.position}º, pero solo ${groups.length} grupos tienen ${s.position}º puesto.`,
+        );
       }
     }
   }
@@ -75,7 +103,9 @@ export function validateFormat(format: FormatDefinition, teamCount: number): str
       `Se ${seeds.length === 1 ? "pide el sembrado" : "piden los sembrados"} ${list(seeds.map(String))}, pero hay ${teamCount} duplas inscritas.`,
     );
   }
-  for (const [position, groups] of [...missingPositions].sort((a, b) => a[0] - b[0])) {
+  for (const [position, groups] of [...missingPositions].sort(
+    (a, b) => a[0] - b[0],
+  )) {
     const names = [...groups].sort();
     errors.push(
       `Se pide el ${position}º puesto ${names.length === 1 ? `del grupo ${names[0]}` : `de los grupos ${list(names)}`}, pero no tiene${names.length === 1 ? "" : "n"} tantas duplas. Reduce los clasificados por grupo.`,
@@ -84,32 +114,80 @@ export function validateFormat(format: FormatDefinition, teamCount: number): str
 
   // Una misma dupla no puede entrar dos veces a una fase de eliminación.
   for (const stage of format.stages) {
-    if (stage.type !== "single_elimination" && stage.type !== "double_elimination") continue;
+    if (
+      stage.type !== "single_elimination" &&
+      stage.type !== "double_elimination"
+    )
+      continue;
     const seen = new Set<string>();
     for (const s of stage.entrants) {
       const k = sourceKey(s);
-      if (seen.has(k)) once(`La fase "${stage.name}" recibe dos veces al mismo clasificado.`);
+      if (seen.has(k))
+        once(`La fase "${stage.name}" recibe dos veces al mismo clasificado.`);
       seen.add(k);
     }
-    if (stage.entrants.length < 2) once(`La fase "${stage.name}" necesita al menos 2 duplas.`);
+    if (stage.entrants.length < 2)
+      once(`La fase "${stage.name}" necesita al menos 2 duplas.`);
   }
 
   if (errors.length > 0) return errors;
 
   // Prueba final: jugar el torneo completo con resultados simulados.
-  const teams: TeamRef[] = Array.from({ length: teamCount }, (_, i) => ({ id: `T${i + 1}`, name: `T${i + 1}`, seed: i + 1 }));
+  const teams: TeamRef[] = Array.from({ length: teamCount }, (_, i) => ({
+    id: `T${i + 1}`,
+    name: `T${i + 1}`,
+    seed: i + 1,
+  }));
   const { state } = simulateTournament(format, gen, teams);
-  const stuck = state.matches.filter((m) => m.status === "undefined" || m.status === "ready");
+  const stuck = state.matches.filter(
+    (m) => m.status === "undefined" || m.status === "ready",
+  );
   if (stuck.length > 0) {
     errors.push(
       `Hay partidos que nunca podrán definirse: ${stuck
         .slice(0, 8)
         .map((m) => `P${m.number}`)
-        .join(", ")}${stuck.length > 8 ? "…" : ""}. Revisa grupos y clasificados.`,
+        .join(
+          ", ",
+        )}${stuck.length > 8 ? "…" : ""}. Revisa grupos y clasificados.`,
     );
   }
   if (state.matches.some((m) => m.teamA && m.teamA === m.teamB)) {
-    errors.push("Algún partido enfrenta a una dupla contra sí misma. Revisa los cruces.");
+    errors.push(
+      "Algún partido enfrenta a una dupla contra sí misma. Revisa los cruces.",
+    );
   }
   return errors;
+}
+
+const isInt = (v: unknown, min: number, max: number) =>
+  Number.isInteger(v) && (v as number) >= min && (v as number) <= max;
+
+/** ¿El tipo de partido tiene valores jugables? Devuelve el problema o null. */
+export function matchRulesProblem(m: {
+  setsToWin: unknown;
+  setPoints: unknown;
+  decidingSetPoints: unknown;
+  winBy: unknown;
+  cap: unknown;
+}): string | null {
+  if (!isInt(m.setsToWin, 1, 3))
+    return "elige a 1 set, al mejor de 3 o al mejor de 5";
+  if (!isInt(m.setPoints, 5, 50))
+    return "los puntos del set deben ser un número entre 5 y 50";
+  if (!isInt(m.decidingSetPoints, 5, 50))
+    return "los puntos del set decisivo deben ser un número entre 5 y 50";
+  if (!isInt(m.winBy, 1, 5))
+    return "la diferencia mínima debe ser entre 1 y 5 puntos";
+  if (
+    m.cap !== null &&
+    m.cap !== undefined &&
+    !(
+      isInt(m.cap, 5, 99) &&
+      (m.cap as number) >=
+        Math.max(m.setPoints as number, m.decidingSetPoints as number)
+    )
+  )
+    return "el tope de puntos debe ser mayor o igual a los puntos del set";
+  return null;
 }
