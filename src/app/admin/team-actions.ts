@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { ROLE_INFO, type Role } from "@/lib/permissions";
 import { createActivationLink, unusablePasswordHash } from "@/lib/staff";
+import { emailLayout, escapeHtml, isEmailEnabled, sendEmail } from "@/lib/email";
 
 // Equipo de la organización. TODA acción empieza con requirePermission("staff.manage"): solo el
 // administrador general invita, cambia roles o quita acceso. (actions.test.ts recorre este archivo.)
@@ -13,6 +14,23 @@ type Result = { ok: true; message?: string; link?: string } | { ok: false; error
 const fail = (error: string): Result => ({ ok: false, error });
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isRole = (r: string): r is Role => r in ROLE_INFO;
+
+/** Con los correos activos, el enlace de acceso también le llega a la persona por correo. */
+async function emailActivationLink(adminId: string, link: string): Promise<boolean> {
+  if (!isEmailEnabled()) return false;
+  const [a] = await sql<{ email: string; name: string }[]>`select email, name from admins where id = ${adminId}`;
+  if (!a) return false;
+  const r = await sendEmail({
+    to: a.email,
+    subject: "Tu acceso al panel de torneos",
+    html: emailLayout(
+      `Hola${a.name ? `, ${escapeHtml(a.name.split(" ")[0])}` : ""}`,
+      ["Te dieron acceso al panel de la organización. Elige tu contraseña con este enlace (vence en 72 horas)."],
+      { label: "Elegir contraseña", url: link },
+    ),
+  });
+  return r.ok && r.sent;
+}
 
 async function superadminCount(exceptAdminId?: string) {
   const [{ n }] = await sql<{ n: number }[]>`
@@ -41,7 +59,15 @@ export async function inviteStaff(fd: FormData): Promise<Result> {
     insert into admins (email, name, password_hash) values (${email}, ${name}, ${await unusablePasswordHash()}) returning id`;
   await sql`insert into admin_roles (admin_id, role, tournament_id) values (${admin.id}, ${role}, ${tournamentId})`;
   revalidatePath("/admin/equipo");
-  return { ok: true, link: await createActivationLink(admin.id), message: "Acceso creado. Envíale el enlace: vence en 72 horas." };
+  const link = await createActivationLink(admin.id);
+  const emailed = await emailActivationLink(admin.id, link);
+  return {
+    ok: true,
+    link,
+    message: emailed
+      ? "Acceso creado y enlace enviado por correo (vence en 72 horas)."
+      : "Acceso creado. Envíale el enlace: vence en 72 horas.",
+  };
 }
 
 export async function addRole(adminId: string, fd: FormData): Promise<Result> {
@@ -89,5 +115,23 @@ export async function newActivationLink(adminId: string): Promise<Result> {
   if (!UUID.test(adminId)) return fail("Miembro inválido");
   const [a] = await sql<{ id: string }[]>`select id from admins where id = ${adminId}`;
   if (!a) return fail("Miembro no encontrado");
-  return { ok: true, link: await createActivationLink(a.id), message: "Enlace creado: vence en 72 horas" };
+  const link = await createActivationLink(a.id);
+  const emailed = await emailActivationLink(a.id, link);
+  return { ok: true, link, message: emailed ? "Enlace creado y enviado por correo: vence en 72 horas" : "Enlace creado: vence en 72 horas" };
+}
+
+/** Correo de prueba a la propia dirección del administrador, para comprobar la configuración. */
+export async function sendTestEmail(): Promise<Result> {
+  const me = await requirePermission("staff.manage");
+  if (!isEmailEnabled()) return fail("Los correos todavía no están activos: falta configurar Resend");
+  const r = await sendEmail({
+    to: me.email,
+    subject: "Correo de prueba · Torneos Vóley Playa",
+    html: emailLayout("¡Funciona!", [
+      "Este es un correo de prueba enviado desde el panel. Si lo recibiste, los atletas también recibirán los correos de confirmación, recuperación de contraseña e inscripciones.",
+      "Si llegó a la carpeta de spam, márcalo como “No es spam”.",
+    ]),
+  });
+  if (!r.ok) return fail(r.error);
+  return { ok: true, message: `Correo enviado a ${me.email}. Revisa tu bandeja (y la carpeta de spam).` };
 }

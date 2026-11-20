@@ -7,6 +7,7 @@ import {
   type Task,
 } from "@/lib/admin-dashboard";
 import { PageTitle } from "@/components/AdminUI";
+import { isEmailEnabled } from "@/lib/email";
 import { createTournament } from "./actions";
 import { TournamentList } from "./TournamentList";
 
@@ -17,13 +18,16 @@ const TASK_ICON: Record<Task["kind"], string> = {
   today: "⏱",
   format: "⚙",
   publish: "◉",
+  email: "✉",
 };
 
 export default async function AdminHome() {
   const admin = await requireAdmin();
   const canCreate = can(admin.grants, "tournament.create");
   const { tournaments, categories, archived } = await getDashboard(admin.grants);
-  const tasks = buildTasks(admin.grants, tournaments, categories);
+  // En desarrollo no se avisa: ahí los correos se guardan a propósito en lugar de enviarse.
+  const emailOk = isEmailEnabled() || process.env.NODE_ENV !== "production";
+  const tasks = buildTasks(admin.grants, tournaments, categories, new Date(), emailOk);
 
   const live = tournaments.filter((t) => t.phase === "live").length;
   const upcoming = tournaments.filter((t) => t.phase === "upcoming").length;

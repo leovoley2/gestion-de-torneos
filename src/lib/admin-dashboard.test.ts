@@ -133,3 +133,14 @@ describe("archivo", () => {
     expect(summarize([{ ...row, end_date: "2026-11-01" }], [], now)[0].phase).toBe("past");
   });
 });
+
+describe("aviso de correos", () => {
+  it("solo el administrador general lo ve, y va primero", () => {
+    const sa = [{ role: "superadmin" as const, tournament_id: null }];
+    const org = [{ role: "organizer" as const, tournament_id: null }];
+    const tasks = buildTasks(sa, [], [cat({ teams: 4 })], now, false);
+    expect(tasks[0]).toMatchObject({ kind: "email", urgent: true, href: "/admin/correos" });
+    expect(buildTasks(org, [], [], now, false).some((t) => t.kind === "email")).toBe(false);
+    expect(buildTasks(sa, [], [], now, true).some((t) => t.kind === "email")).toBe(false);
+  });
+});

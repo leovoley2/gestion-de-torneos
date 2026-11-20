@@ -14,6 +14,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     ...(can(admin.grants, "athletes.support") ? [{ href: "/admin/atletas", label: "Atletas" }] : []),
     ...(can(admin.grants, "ranking.manage") ? [{ href: "/admin/ranking", label: "Ranking" }] : []),
     ...(can(admin.grants, "staff.manage") ? [{ href: "/admin/equipo", label: "Equipo" }] : []),
+    ...(can(admin.grants, "staff.manage") ? [{ href: "/admin/correos", label: "Correos" }] : []),
   ];
   return (
     <div className="min-h-screen">

@@ -35,7 +35,7 @@ export interface TournamentSummary {
 }
 
 export interface Task {
-  kind: "review" | "today" | "format" | "publish";
+  kind: "review" | "today" | "format" | "publish" | "email";
   urgent: boolean;
   title: string;
   detail: string;
@@ -203,8 +203,18 @@ export function buildTasks(
   tournaments: TournamentSummary[],
   categories: CategorySummary[],
   now = new Date(),
+  emailEnabled = true,
 ): Task[] {
   const tasks: Task[] = [];
+  if (!emailEnabled && can(grants, "staff.manage")) {
+    tasks.push({
+      kind: "email",
+      urgent: true,
+      title: "Los correos no se están enviando",
+      detail: "Los atletas no reciben confirmaciones ni recuperación de contraseña",
+      href: "/admin/correos",
+    });
+  }
   const where = (c: CategorySummary) => `${c.tournament_name} · ${c.name}`;
   const plural = (n: number, one: string, many: string) =>
     `${n} ${n === 1 ? one : many}`;
