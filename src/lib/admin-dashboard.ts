@@ -50,12 +50,24 @@ export function progressOf(
   return c.matches > 0 ? Math.min(1, c.results / c.matches) : 0;
 }
 
-/** Categorías de los torneos visibles, con conteos para el panel. */
+/** Los torneos terminados hace más de esto pasan al archivo y salen del inicio del panel. */
+export const ARCHIVE_AFTER_DAYS = 90;
+
+/** Fecha (AAAA-MM-DD, hora de Lima) desde la que un torneo sigue en el inicio del panel. */
+export function archiveCutoff(now = new Date()): string {
+  const today = now.toLocaleDateString("en-CA", { timeZone: "America/Lima" });
+  const d = new Date(`${today}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - ARCHIVE_AFTER_DAYS);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Categorías de los torneos visibles (o solo de los indicados), con conteos para el panel. */
 export async function getCategorySummaries(
   grants: RoleGrant[],
-  tournamentId?: string,
+  tournamentIds?: string[],
 ): Promise<CategorySummary[]> {
   const visible = visibleTournaments(grants);
+  if (tournamentIds && tournamentIds.length === 0) return [];
   const today = new Date().toLocaleDateString("en-CA", {
     timeZone: "America/Lima",
   });
@@ -73,35 +85,26 @@ export async function getCategorySummaries(
       ) as today_pending
     from categories c join tournaments t on t.id = c.tournament_id
     where (${visible === null} or c.tournament_id = any(${visible ?? []}::uuid[]))
-      and (${tournamentId ?? null}::uuid is null or c.tournament_id = ${tournamentId ?? null}::uuid)
+      and (${!tournamentIds} or c.tournament_id = any(${tournamentIds ?? []}::uuid[]))
     order by t.start_date desc nulls first, c.created_at`;
 }
 
-/** Torneos visibles con totales de sus categorías. */
-export async function getTournamentSummaries(
-  grants: RoleGrant[],
+export type TournamentRow = Pick<
+  TournamentSummary,
+  "id" | "name" | "city" | "start_date" | "end_date" | "published"
+>;
+
+/** Suma los conteos de sus categorías a cada torneo y calcula en qué momento está. */
+export function summarize(
+  rows: TournamentRow[],
   categories: CategorySummary[],
-): Promise<TournamentSummary[]> {
-  const visible = visibleTournaments(grants);
-  const rows = await sql<
-    Omit<
-      TournamentSummary,
-      | "phase"
-      | "categories"
-      | "teams"
-      | "matches"
-      | "results"
-      | "pending_reviews"
-    >[]
-  >`
-    select id, name, city, start_date, end_date, published from tournaments
-    where ${visible === null} or id = any(${visible ?? []}::uuid[])
-    order by start_date desc nulls first, created_at desc`;
+  now = new Date(),
+): TournamentSummary[] {
   return rows.map((t) => {
     const cats = categories.filter((c) => c.tournament_id === t.id);
     const sum = (k: "teams" | "matches" | "results" | "pending_reviews") =>
       cats.reduce((n, c) => n + c[k], 0);
-    let phase = tournamentPhase(t.start_date, t.end_date);
+    let phase = tournamentPhase(t.start_date, t.end_date, now);
     // Sin fechas, el estado sale de sus categorías.
     if (phase === "unknown" && cats.length > 0) {
       phase = cats.every((c) => c.status === "finished")
@@ -120,6 +123,68 @@ export async function getTournamentSummaries(
       pending_reviews: sum("pending_reviews"),
     };
   });
+}
+
+/**
+ * Inicio del panel: torneos sin fechas, por venir, en curso o terminados hace menos de
+ * ARCHIVE_AFTER_DAYS días. Los más antiguos quedan en el archivo, así el inicio no crece con los años.
+ */
+export async function getDashboard(grants: RoleGrant[]) {
+  const visible = visibleTournaments(grants);
+  const cutoff = archiveCutoff();
+  const rows = await sql<TournamentRow[]>`
+    select id, name, city, start_date, end_date, published from tournaments
+    where (${visible === null} or id = any(${visible ?? []}::uuid[]))
+      and (coalesce(end_date, start_date) is null or coalesce(end_date, start_date) >= ${cutoff}::date)
+    order by start_date desc nulls first, created_at desc`;
+  const [{ n: archived }] = await sql<{ n: number }[]>`
+    select count(*)::int as n from tournaments
+    where (${visible === null} or id = any(${visible ?? []}::uuid[]))
+      and coalesce(end_date, start_date) < ${cutoff}::date`;
+  const categories = await getCategorySummaries(
+    grants,
+    rows.map((r) => r.id),
+  );
+  return { tournaments: summarize(rows, categories), categories, archived };
+}
+
+export const ARCHIVE_PAGE_SIZE = 20;
+
+/** Archivo: torneos terminados hace más de ARCHIVE_AFTER_DAYS días, por año, con búsqueda y páginas. */
+export async function getArchive(
+  grants: RoleGrant[],
+  opts: { q?: string; year?: number; page?: number },
+) {
+  const visible = visibleTournaments(grants);
+  const cutoff = archiveCutoff();
+  const q = (opts.q ?? "").trim();
+  const like = `%${q.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
+  const year = opts.year ?? null;
+  const page = Math.max(1, Math.floor(opts.page ?? 1));
+  const rows = await sql<TournamentRow[]>`
+    select id, name, city, start_date, end_date, published from tournaments
+    where (${visible === null} or id = any(${visible ?? []}::uuid[]))
+      and coalesce(end_date, start_date) < ${cutoff}::date
+      and (${!q} or name ilike ${like} or city ilike ${like})
+      and (${year}::int is null or extract(year from coalesce(start_date, end_date)) = ${year}::int)
+    order by coalesce(start_date, end_date) desc, created_at desc
+    limit ${ARCHIVE_PAGE_SIZE + 1} offset ${(page - 1) * ARCHIVE_PAGE_SIZE}`;
+  const years = await sql<{ y: number }[]>`
+    select distinct extract(year from coalesce(start_date, end_date))::int as y from tournaments
+    where (${visible === null} or id = any(${visible ?? []}::uuid[]))
+      and coalesce(end_date, start_date) < ${cutoff}::date
+    order by y desc`;
+  const shown = rows.slice(0, ARCHIVE_PAGE_SIZE);
+  const categories = await getCategorySummaries(
+    grants,
+    shown.map((r) => r.id),
+  );
+  return {
+    tournaments: summarize(shown, categories),
+    years: years.map((r) => r.y),
+    page,
+    hasMore: rows.length > ARCHIVE_PAGE_SIZE,
+  };
 }
 
 const daysUntil = (date: string, now: Date) => {

@@ -38,7 +38,7 @@ export default async function AdminTournament({
   >`select * from tournaments where id = ${id}`;
   if (!t) notFound();
   const canDuplicate = canEdit && can(admin.grants, "tournament.create");
-  const categories = await getCategorySummaries(admin.grants, id);
+  const categories = await getCategorySummaries(admin.grants, [id]);
 
   return (
     <div className="space-y-6">

@@ -3,8 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { ROLE_INFO, can } from "@/lib/permissions";
 import {
   buildTasks,
-  getCategorySummaries,
-  getTournamentSummaries,
+  getDashboard,
   type Task,
 } from "@/lib/admin-dashboard";
 import { PageTitle } from "@/components/AdminUI";
@@ -23,8 +22,7 @@ const TASK_ICON: Record<Task["kind"], string> = {
 export default async function AdminHome() {
   const admin = await requireAdmin();
   const canCreate = can(admin.grants, "tournament.create");
-  const categories = await getCategorySummaries(admin.grants);
-  const tournaments = await getTournamentSummaries(admin.grants, categories);
+  const { tournaments, categories, archived } = await getDashboard(admin.grants);
   const tasks = buildTasks(admin.grants, tournaments, categories);
 
   const live = tournaments.filter((t) => t.phase === "live").length;
@@ -87,7 +85,7 @@ export default async function AdminHome() {
               <Pending tasks={tasks} />
             </div>
           )}
-          <TournamentList tournaments={tournaments} />
+          <TournamentList tournaments={tournaments} archived={archived} />
         </div>
 
         <aside className="space-y-6 lg:sticky lg:top-24">

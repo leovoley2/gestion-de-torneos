@@ -66,7 +66,6 @@ export default async function PublicCategory({ params }: { params: Promise<{ id:
 
   return (
     <>
-      <LiveRefresh categoryId={category.id} status={category.status} />
       <SiteHeader>
         <Link
           href={`/torneos/${tournament.id}`}
@@ -76,6 +75,7 @@ export default async function PublicCategory({ params }: { params: Promise<{ id:
         </Link>
         <p className="eyebrow mt-4 text-sky-300">{GENDER_LABEL[category.gender]}</p>
         <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">{category.name}</h1>
+        <LiveRefresh categoryId={category.id} status={category.status} />
 
         {total > 0 && (
           <div className="mt-5 max-w-sm">

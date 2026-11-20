@@ -107,7 +107,10 @@ export async function getCategoryVersion(categoryId: string): Promise<string | n
       (select max(updated_at)::text || ':' || count(*) from results where category_id = c.id),
       (select max(updated_at)::text || ':' || count(*) from schedule where category_id = c.id),
       md5(coalesce(c.generated::text, '')),
-      (select count(*) from teams where category_id = c.id)
+      -- Duplas: también detecta un cambio de jugador o de siembra, no solo cuántas hay.
+      (select md5(coalesce(string_agg(concat_ws(',', id, seed, player1, player2), ';' order by seed), ''))
+        from teams where category_id = c.id),
+      c.status
     ) as v
     from categories c join tournaments t on t.id = c.tournament_id
     where c.id = ${categoryId} and t.published`;

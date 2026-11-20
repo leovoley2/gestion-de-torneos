@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("./db", () => ({ sql: () => Promise.resolve([]) }));
-const { buildTasks, progressOf } = await import("./admin-dashboard");
+const { buildTasks, progressOf, archiveCutoff, summarize } = await import("./admin-dashboard");
 type Cat = Parameters<typeof buildTasks>[2][number];
 type Tour = Parameters<typeof buildTasks>[1][number];
 
@@ -108,5 +108,28 @@ describe("pendientes del panel", () => {
       0.5,
     );
     expect(progressOf({ status: "setup", matches: 0, results: 0 })).toBe(0);
+  });
+});
+
+describe("archivo", () => {
+  it("el corte es 90 días antes de hoy (hora de Lima)", () => {
+    expect(archiveCutoff(now)).toBe("2026-08-22");
+    // 02:00 UTC del 1 de enero todavía es 31 de diciembre en Lima.
+    expect(archiveCutoff(new Date("2027-01-01T02:00:00Z"))).toBe("2026-10-02");
+  });
+
+  it("suma las categorías de cada torneo y deduce el estado si no tiene fechas", () => {
+    const row = { id: T1, name: "Etapa 1", city: null, start_date: null, end_date: null, published: true };
+    const [t] = summarize(
+      [row],
+      [
+        cat({ id: "a", status: "finished", teams: 8, matches: 12, results: 12 }),
+        cat({ id: "b", status: "in_progress", teams: 6, matches: 9, results: 4, pending_reviews: 1 }),
+        cat({ id: "c", tournament_id: T2, teams: 99 }),
+      ],
+      now,
+    );
+    expect(t).toMatchObject({ phase: "live", categories: 2, teams: 14, matches: 21, results: 16, pending_reviews: 1 });
+    expect(summarize([{ ...row, end_date: "2026-11-01" }], [], now)[0].phase).toBe("past");
   });
 });
