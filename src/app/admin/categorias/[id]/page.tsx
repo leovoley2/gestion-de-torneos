@@ -117,6 +117,7 @@ export default async function AdminCategory({ params }: { params: Promise<{ id: 
               </details>
             )}
             <RankingPanel view={view} canEdit={canEdit} />
+            {(canEdit || canReview) && <RegistrationsSection categoryId={category.id} editable={canEdit} canReview={canReview} />}
             {category.format.stages.map((s) => (
               <StageView
                 key={s.key}

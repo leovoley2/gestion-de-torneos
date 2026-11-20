@@ -4,10 +4,17 @@ import { getAdmin } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { signOut } from "@/app/login/actions";
 import { Wordmark } from "@/components/Brand";
+import { AdminNav, type NavItem } from "./AdminNav";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const admin = await getAdmin();
   if (!admin) redirect("/login");
+  const items: NavItem[] = [
+    { href: "/admin", label: "Inicio", also: ["/admin/torneos", "/admin/categorias"] },
+    ...(can(admin.grants, "athletes.support") ? [{ href: "/admin/atletas", label: "Atletas" }] : []),
+    ...(can(admin.grants, "ranking.manage") ? [{ href: "/admin/ranking", label: "Ranking" }] : []),
+    ...(can(admin.grants, "staff.manage") ? [{ href: "/admin/equipo", label: "Equipo" }] : []),
+  ];
   return (
     <div className="min-h-screen">
       <header className="bg-ocean sticky top-0 z-20 text-white shadow-[0_8px_24px_-16px_rgb(7_20_41/0.6)]">
@@ -18,25 +25,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               Panel
             </span>
           </Link>
-          <nav className="flex items-center gap-1 text-sm">
-            <Link href="/admin" className="btn-ghost px-3 py-1.5 text-xs font-medium">
-              Torneos
-            </Link>
-            {can(admin.grants, "athletes.support") && (
-              <Link href="/admin/atletas" className="btn-ghost px-3 py-1.5 text-xs font-medium">
-                Atletas
-              </Link>
-            )}
-            {can(admin.grants, "ranking.manage") && (
-              <Link href="/admin/ranking" className="btn-ghost px-3 py-1.5 text-xs font-medium">
-                Ranking
-              </Link>
-            )}
-            {can(admin.grants, "staff.manage") && (
-              <Link href="/admin/equipo" className="btn-ghost px-3 py-1.5 text-xs font-medium">
-                Equipo
-              </Link>
-            )}
+          <nav className="-mr-2 flex min-w-0 items-center gap-1 overflow-x-auto text-sm" aria-label="Panel">
+            <AdminNav items={items} />
             <Link href="/" className="btn-ghost hidden px-3 py-1.5 text-xs font-medium sm:inline-flex">
               Sitio público ↗
             </Link>

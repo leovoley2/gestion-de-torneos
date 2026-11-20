@@ -27,7 +27,7 @@ export async function RegistrationsSection({
   const active = registrations.filter((r) => ["pending_review", "pending_partner"].includes(r.status));
 
   return (
-    <section className="card space-y-5">
+    <section id="inscripciones" className="card scroll-mt-24 space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="font-semibold text-navy-900">Inscripciones de atletas</h2>

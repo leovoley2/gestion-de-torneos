@@ -71,6 +71,35 @@ export async function setPublished(id: string, published: boolean) {
   refresh(undefined, id);
 }
 
+/**
+ * Duplica un torneo para otra etapa del circuito: copia sus categorías con su configuración
+ * (rama, cupo, años de nacimiento, ranking y tabla de puntos). No copia duplas, formato ni resultados;
+ * queda en borrador y con inscripciones cerradas.
+ */
+export async function duplicateTournament(id: string, formData: FormData) {
+  await requirePermission("tournament.create");
+  await requirePermission("tournament.edit", { tournamentId: id });
+  assertId(id);
+  const name = text(formData.get("name"));
+  if (!name) throw new Error("El torneo necesita un nombre");
+  const newId = await sql.begin(async (tx) => {
+    const [src] = await tx<{ city: string | null }[]>`select city from tournaments where id = ${id}`;
+    if (!src) throw new Error("Torneo no encontrado");
+    const [t] = await tx<{ id: string }[]>`
+      insert into tournaments (name, city, start_date, end_date)
+      values (${name}, ${optional(formData.get("city")) ?? src.city}, ${optional(formData.get("start_date"))}, ${optional(formData.get("end_date"))})
+      returning id`;
+    await tx`
+      insert into categories (tournament_id, name, gender, max_teams, min_birth_year, max_birth_year, ranking_id, point_table_id, created_at)
+      select ${t.id}, name, gender, max_teams, min_birth_year, max_birth_year, ranking_id, point_table_id,
+        now() + (row_number() over (order by created_at)) * interval '1 millisecond' -- conserva el orden
+      from categories where tournament_id = ${id}`;
+    return t.id;
+  });
+  revalidatePath("/admin");
+  redirect(`/admin/torneos/${newId}`);
+}
+
 export async function deleteTournament(id: string) {
   await requirePermission("tournament.edit", { tournamentId: id });
   assertId(id);
