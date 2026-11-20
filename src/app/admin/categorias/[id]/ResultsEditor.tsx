@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import type { FormatDefinition, ResolvedMatch } from "@/lib/engine";
-import { stageRules } from "@/lib/engine";
+import { describeMatchRules, stageRules, type MatchRules } from "@/lib/engine";
 import { StatusPill } from "@/components/StageView";
 import { saveResult, saveSchedule } from "@/app/admin/actions";
 import type { ScheduleRow } from "@/lib/data";
@@ -63,7 +63,7 @@ export function ResultsEditor({
             key={`${m.key}-${JSON.stringify(m.result)}-${m.teamA}-${m.teamB}`}
             categoryId={categoryId}
             match={m}
-            setsToWin={stageRules(format, format.stages.find((s) => s.key === m.stageKey)!).match.setsToWin}
+            rules={stageRules(format, format.stages.find((s) => s.key === m.stageKey)!).match}
             nameA={m.teamA ? teamNames[m.teamA] : describe[m.key]?.a}
             nameB={m.teamB ? teamNames[m.teamB] : describe[m.key]?.b}
             schedule={schedule[m.key]}
@@ -84,19 +84,19 @@ const toLocalInput = (iso?: string | null) => {
 function MatchEditor({
   categoryId,
   match: m,
-  setsToWin,
+  rules,
   nameA,
   nameB,
   schedule,
 }: {
   categoryId: string;
   match: ResolvedMatch;
-  setsToWin: number;
+  rules: MatchRules;
   nameA?: string;
   nameB?: string;
   schedule?: ScheduleRow;
 }) {
-  const maxSets = setsToWin * 2 - 1;
+  const maxSets = rules.setsToWin * 2 - 1;
   const initial = Array.from({ length: maxSets }, (_, i) => ({
     a: m.result?.sets[i]?.a?.toString() ?? "",
     b: m.result?.sets[i]?.b?.toString() ?? "",
@@ -129,6 +129,7 @@ function MatchEditor({
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-navy-400">
         <span>
           <span className="font-semibold text-navy-600">P{m.number}</span> · {m.label}
+          <span className="ml-2 rounded-full bg-navy-50 px-2 py-0.5 font-medium text-navy-600">{describeMatchRules(rules)}</span>
         </span>
         <StatusPill status={m.status} />
       </div>

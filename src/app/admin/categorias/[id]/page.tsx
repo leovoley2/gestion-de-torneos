@@ -36,6 +36,7 @@ export default async function AdminCategory({ params }: { params: Promise<{ id: 
   );
 
   const played = state?.matches.filter((m) => m.status === "finished").length ?? 0;
+  const results = Object.keys(view.results ?? {}).length;
   const total = state?.matches.filter((m) => m.status !== "cancelled").length ?? 0;
   const step = !hasFormat ? (teams.length >= 2 ? 2 : 1) : 3;
 
@@ -101,6 +102,20 @@ export default async function AdminCategory({ params }: { params: Promise<{ id: 
                 schedule={schedule}
               />
             )}
+            {canEdit && (
+              <details className="card group p-0" id="editar-formato">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5 font-semibold text-navy-900">
+                  <span>
+                    Editar formato
+                    <span className="ml-2 text-sm font-normal text-navy-400">tipo de partido, fases y llaves</span>
+                  </span>
+                  <span className="text-navy-400 transition-transform group-open:rotate-180" aria-hidden="true">⌄</span>
+                </summary>
+                <div className="border-t border-navy-50 p-5 pt-4">
+                  <FormatBuilder categoryId={category.id} teams={teamRefs} existing={category.format} results={results} />
+                </div>
+              </details>
+            )}
             <RankingPanel view={view} canEdit={canEdit} />
             {category.format.stages.map((s) => (
               <StageView
@@ -117,7 +132,7 @@ export default async function AdminCategory({ params }: { params: Promise<{ id: 
             ))}
           </div>
           <aside className="space-y-6 xl:sticky xl:top-24">
-            <TeamsManager categoryId={category.id} teams={teams} locked points={points} />
+            <TeamsManager categoryId={category.id} teams={teams} locked={!canEdit} hasFormat results={results} points={points} />
             {canEdit && (
             <DangerZone>
               <ConfirmButton

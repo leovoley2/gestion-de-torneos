@@ -71,6 +71,16 @@ En el hosting (Vercel/Netlify) se cargan las mismas variables `DATABASE_URL` y `
 | `RESEND_API_KEY`, `EMAIL_FROM` | Envío de correos (requiere dominio propio verificado en Resend) | los correos se guardan en `email_outbox`; en desarrollo se ven en `/dev/correos`. No se exige confirmar el correo y la organización genera enlaces de contraseña desde `/admin/atletas` |
 | `APP_URL` | URL base de los enlaces en correos | usa la URL de Vercel o `http://localhost:3000` |
 
+## Formato y correcciones con el torneo en curso
+
+- Al armar el formato se elige el **tipo de partido**: a 1 set o al mejor de 3 (puntos de cada set y del set
+  decisivo), y opcionalmente otro distinto para la última fase (p. ej. grupos a 1 set y llave al mejor de 3).
+  Cada resultado se valida contra el tipo de partido de su fase.
+- Con resultados cargados se puede **editar el formato** y **cambiar jugadores o la siembra** de una dupla.
+  `engine/changes.ts` compara antes y después: si algún partido jugado deja de existir, lo jugarían otras
+  duplas o su marcador ya no cumple el tipo de partido, el cambio se rechaza y se listan esos partidos.
+  Agregar o quitar duplas solo se permite sin resultados (el formato se vuelve a armar).
+
 ## Equipo de la organización y roles
 
 | Rol | Puede |

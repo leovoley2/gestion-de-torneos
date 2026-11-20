@@ -8,3 +8,4 @@ export { TEMPLATES, qualifiers, type TemplateOptions, type TemplateInfo } from "
 export { bracketSeedOrder, distributeIntoGroups, groupName } from "./seeding";
 export { validateFormat } from "./validate";
 export { finalStandings, tieSizes, type FinalPosition } from "./final-standings";
+export { applyMatchRules, describeMatchRules, resultConflicts, type MatchMode, type TournamentSetup } from "./changes";

@@ -6,6 +6,7 @@ import {
   checkMatch,
   generateFormat,
   resolveTournament,
+  resultConflicts,
   stageRules,
   validateFormat,
   type FormatDefinition,
@@ -22,7 +23,7 @@ import { sql } from "@/lib/db";
 // ejecuta nada. Es la única vía de escritura a la base de datos (que solo el servidor conoce).
 // Un test (actions.test.ts) llama a cada acción exportada sin sesión y verifica que falle.
 
-type Result = { ok: true } | { ok: false; error: string };
+type Result = { ok: true; message?: string } | { ok: false; error: string };
 
 const fail = (error: string): Result => ({ ok: false, error });
 const text = (v: FormDataEntryValue | null) => String(v ?? "").trim();
@@ -103,10 +104,26 @@ export async function deleteCategory(categoryId: string, tournamentId: string) {
 
 // ───────── Duplas ─────────
 
-async function formatLocked(categoryId: string): Promise<string | null> {
-  const [c] = await sql<{ locked: boolean }[]>`select format is not null as locked from categories where id = ${categoryId}`;
+/**
+ * Agregar o quitar duplas cambia cuántas hay: solo se permite si todavía no hay resultados.
+ * Si ya había formato, se descarta (hay que volver a armarlo con la nueva cantidad).
+ */
+async function teamCountChangeBlocked(categoryId: string): Promise<string | null> {
+  const [c] = await sql<{ results: number }[]>`
+    select (select count(*)::int from results where category_id = c.id) as results from categories c where c.id = ${categoryId}`;
   if (!c) return "Categoría no encontrada";
-  return c.locked ? "El formato ya está generado. Para cambiar duplas, reinicia el formato." : null;
+  return c.results > 0
+    ? "Ya hay resultados cargados: para agregar o quitar duplas primero borra esos resultados o reinicia el formato. (Para corregir un jugador usa “Cambiar jugadores”.)"
+    : null;
+}
+
+/** Descarta el formato (sin resultados) porque cambió la cantidad de duplas. Devuelve si había formato. */
+async function discardFormatAfterTeamChange(categoryId: string): Promise<boolean> {
+  const rows = await sql`
+    update categories set format = null, generated = null, status = 'setup'
+    where id = ${categoryId} and format is not null returning id`;
+  if (rows.length) await sql`delete from schedule where category_id = ${categoryId}`;
+  return rows.length > 0;
 }
 
 export interface AthleteOption {
@@ -169,7 +186,7 @@ export async function createAthleteRecord(categoryId: string, formData: FormData
 export async function addTeam(categoryId: string, formData: FormData): Promise<Result> {
   await requirePermission("tournament.edit", { categoryId });
   assertId(categoryId);
-  const blocked = await formatLocked(categoryId);
+  const blocked = await teamCountChangeBlocked(categoryId);
   if (blocked) return fail(blocked);
   const ids = [text(formData.get("athlete1_id")), text(formData.get("athlete2_id"))];
   if (!ids.every(isUuid)) return fail("Elige a los dos jugadores");
@@ -196,8 +213,39 @@ export async function addTeam(categoryId: string, formData: FormData): Promise<R
     insert into teams (category_id, player1, player2, seed, athlete1_id, athlete2_id)
     values (${categoryId}, ${fullName(a1)}, ${fullName(a2)},
       (select coalesce(max(seed), 0) + 1 from teams where category_id = ${categoryId}), ${a1.id}, ${a2.id})`;
+  const hadFormat = await discardFormatAfterTeamChange(categoryId);
   refresh(categoryId);
-  return { ok: true };
+  return { ok: true, message: hadFormat ? "Dupla agregada. Como cambió la cantidad de duplas, vuelve a armar el formato." : undefined };
+}
+
+/** Corrige los jugadores de una dupla (p. ej. un jugador equivocado). Se puede con el torneo en curso. */
+export async function replaceTeamPlayers(categoryId: string, teamId: string, formData: FormData): Promise<Result> {
+  await requirePermission("tournament.edit", { categoryId });
+  assertId(categoryId);
+  assertId(teamId);
+  const ids = [text(formData.get("athlete1_id")), text(formData.get("athlete2_id"))];
+  if (!ids.every(isUuid)) return fail("Elige a los dos jugadores");
+  if (ids[0] === ids[1]) return fail("Elige dos jugadores distintos");
+  const [team] = await sql<{ id: string }[]>`select id from teams where id = ${teamId} and category_id = ${categoryId}`;
+  if (!team) return fail("Dupla no encontrada");
+  const athletes = await sql<Athlete[]>`select * from athletes where id = any(${ids}::uuid[])`;
+  const a1 = athletes.find((a) => a.id === ids[0]);
+  const a2 = athletes.find((a) => a.id === ids[1]);
+  if (!a1 || !a2) return fail("Jugador no encontrado");
+  const [category] = await sql<{ gender: "F" | "M" | "X"; min_birth_year: number | null; max_birth_year: number | null }[]>`
+    select gender, min_birth_year, max_birth_year from categories where id = ${categoryId}`;
+  const issues = eligibilityIssues({ ...category, registration_open: true, registration_deadline: null, has_format: false }, a1, a2);
+  if (issues.length) return fail(issues.join(". "));
+  const [dup] = await sql<{ id: string }[]>`
+    select id from teams where category_id = ${categoryId} and id <> ${teamId}
+      and (athlete1_id = any(${ids}::uuid[]) or athlete2_id = any(${ids}::uuid[])) limit 1`;
+  if (dup) return fail("Uno de los jugadores ya está en otra dupla de esta categoría");
+  // La dupla conserva su id, su siembra y sus resultados; solo cambian sus jugadores.
+  await sql`
+    update teams set player1 = ${fullName(a1)}, player2 = ${fullName(a2)}, athlete1_id = ${a1.id}, athlete2_id = ${a2.id}
+    where id = ${teamId}`;
+  refresh(categoryId);
+  return { ok: true, message: "Jugadores corregidos" };
 }
 
 /** Reordena la siembra: `orderedIds[0]` queda como sembrado 1. */
@@ -205,8 +253,17 @@ export async function reorderTeams(categoryId: string, orderedIds: string[]): Pr
   await requirePermission("tournament.edit", { categoryId });
   assertId(categoryId);
   if (!Array.isArray(orderedIds) || !orderedIds.every(isUuid)) return fail("Lista inválida");
-  const blocked = await formatLocked(categoryId);
-  if (blocked) return fail(blocked);
+  const view = await getCategoryView(categoryId, { includeDrafts: true });
+  if (!view) return fail("Categoría no encontrada");
+  const current = view.teams.map((t) => t.id);
+  if (orderedIds.length !== current.length || !current.every((id) => orderedIds.includes(id))) return fail("Lista inválida");
+  // Con formato y resultados: solo si ningún partido jugado cambia de duplas.
+  if (view.category.format && view.category.generated) {
+    const reseeded = view.teamRefs.map((t) => ({ ...t, seed: orderedIds.indexOf(t.id) + 1 }));
+    const setup = { format: view.category.format, gen: view.category.generated };
+    const issues = resultConflicts({ ...setup, teams: view.teamRefs }, { ...setup, teams: reseeded }, view.results);
+    if (issues.length) return fail(`No se puede cambiar la siembra, cambiaría partidos ya jugados:\n• ${issues.join("\n• ")}`);
+  }
   await sql.begin(async (tx) => {
     // La restricción única de siembra es diferida: se valida al confirmar la transacción.
     for (const [i, id] of orderedIds.entries()) {
@@ -221,7 +278,7 @@ export async function deleteTeam(categoryId: string, teamId: string): Promise<Re
   await requirePermission("tournament.edit", { categoryId });
   assertId(categoryId);
   assertId(teamId);
-  const blocked = await formatLocked(categoryId);
+  const blocked = await teamCountChangeBlocked(categoryId);
   if (blocked) return fail(blocked);
   await sql.begin(async (tx) => {
     // Si la dupla vino de una inscripción, la inscripción queda como retirada por la organización.
@@ -234,8 +291,9 @@ export async function deleteTeam(categoryId: string, teamId: string): Promise<Re
       from (select id, row_number() over (order by seed) as n from teams where category_id = ${categoryId}) r
       where t.id = r.id`;
   });
+  const hadFormat = await discardFormatAfterTeamChange(categoryId);
   refresh(categoryId);
-  return { ok: true };
+  return { ok: true, message: hadFormat ? "Dupla quitada. Como cambió la cantidad de duplas, vuelve a armar el formato." : undefined };
 }
 
 // ───────── Formato ─────────
@@ -245,9 +303,6 @@ export async function saveFormat(categoryId: string, formatJson: string): Promis
   assertId(categoryId);
   const view = await getCategoryView(categoryId, { includeDrafts: true });
   if (!view) return fail("Categoría no encontrada");
-  if (Object.keys(view.results).length > 0) {
-    return fail("Ya hay resultados cargados. Reinicia el formato para cambiarlo.");
-  }
   let format: FormatDefinition;
   let generated;
   try {
@@ -258,15 +313,36 @@ export async function saveFormat(categoryId: string, formatJson: string): Promis
   }
   const problems = validateFormat(format, view.teams.length);
   if (problems.length > 0) return fail(problems.join(" "));
+
+  // Editar con resultados cargados: se conservan si siguen valiendo con el nuevo formato.
+  const { format: oldFormat, generated: oldGen } = view.category;
+  if (oldFormat && oldGen) {
+    const conflicts = resultConflicts(
+      { format: oldFormat, gen: oldGen, teams: view.teamRefs },
+      { format, gen: generated, teams: view.teamRefs },
+      view.results,
+    );
+    if (conflicts.length) {
+      return fail(
+        `El cambio afecta partidos que ya tienen resultado:\n• ${conflicts.join("\n• ")}\nCorrige o borra esos resultados primero.`,
+      );
+    }
+  }
+  const keys = generated.matches.map((m) => m.key);
+  const after = resolveTournament(format, generated, view.teamRefs, view.results);
+  const done = after.matches.every((m) => m.status === "finished" || m.status === "cancelled");
   await sql.begin(async (tx) => {
     await tx`
       update categories set format = ${tx.json(JSON.parse(JSON.stringify(format)))},
-        generated = ${tx.json(JSON.parse(JSON.stringify(generated)))}, status = 'in_progress'
+        generated = ${tx.json(JSON.parse(JSON.stringify(generated)))}, status = ${done ? "finished" : "in_progress"}
       where id = ${categoryId}`;
-    await tx`delete from schedule where category_id = ${categoryId}`;
+    // Programación y resultados de partidos que ya no existen se descartan; el resto se conserva.
+    await tx`delete from schedule where category_id = ${categoryId} and not (match_key = any(${keys}::text[]))`;
+    await tx`delete from results where category_id = ${categoryId} and not (match_key = any(${keys}::text[]))`;
   });
   refresh(categoryId);
-  return { ok: true };
+  const kept = Object.keys(view.results).filter((k) => keys.includes(k)).length;
+  return { ok: true, message: kept ? `Formato actualizado: se conservaron ${kept} resultados` : "Formato guardado" };
 }
 
 /** Borra formato, resultados y programación (las duplas se mantienen). */
