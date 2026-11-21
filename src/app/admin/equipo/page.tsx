@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAdmin } from "@/lib/auth";
 import { sql } from "@/lib/db";
@@ -39,7 +40,10 @@ export default async function TeamPage() {
       <PageTitle eyebrow="Panel de administración" title="Equipo de la organización">
         <p className="mt-2 max-w-2xl text-sm text-navy-400">
           Da acceso a otras personas con el rol que necesitan, para todos los torneos o solo para uno. Cada persona
-          recibe un enlace para elegir su contraseña.
+          recibe un enlace para elegir su contraseña.{" "}
+          <Link href="/admin/correos" className="font-medium text-sky-700 hover:text-sky-900">
+            Configuración de correos →
+          </Link>
         </p>
       </PageTitle>
 

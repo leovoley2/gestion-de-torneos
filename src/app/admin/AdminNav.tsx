@@ -16,7 +16,7 @@ export function AdminNav({ items }: { items: NavItem[] }) {
   const active = (it: NavItem) =>
     it.href === "/admin"
       ? path === "/admin" || (it.also ?? []).some((p) => path.startsWith(p))
-      : path.startsWith(it.href);
+      : path.startsWith(it.href) || (it.also ?? []).some((p) => path.startsWith(p));
   return (
     <>
       {items.map((it) => (
