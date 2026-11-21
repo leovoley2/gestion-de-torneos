@@ -74,6 +74,9 @@ export async function updateProfile(_: Result | null, fd: FormData): Promise<Res
     throw e;
   }
   revalidatePath("/cuenta", "layout");
+  // Nombre, club y ciudad salen en su perfil público, en el ranking y en las duplas.
+  revalidatePath(`/atletas/${me.id}`);
+  revalidatePath("/ranking", "layout");
   return { ok: true, message: "Perfil guardado" };
 }
 
