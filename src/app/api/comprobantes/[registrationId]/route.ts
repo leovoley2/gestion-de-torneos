@@ -36,8 +36,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ registrati
       "Content-Type": r.payment_file_type ?? "application/octet-stream",
       "Content-Disposition": `inline; filename="${encodeURIComponent(r.payment_file_name ?? "comprobante")}"`,
       "Cache-Control": "private, no-store",
+      // El tipo ya se validó por su contenido al subirlo (solo PDF/JPG/PNG/WEBP) y nosniff impide que el
+      // navegador lo interprete como otra cosa. Sin "sandbox": Chrome bloquea su visor de PDF con esa cabecera.
       "X-Content-Type-Options": "nosniff",
-      "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
     },
   });
 }

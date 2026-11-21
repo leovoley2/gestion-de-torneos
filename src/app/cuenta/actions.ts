@@ -28,6 +28,7 @@ import {
   voucherType,
 } from "@/lib/registrations";
 import { MAX_PDF_BYTES, deletePrivateFile, isPdf, savePrivateFile } from "@/lib/storage";
+import { tooBigMessage } from "@/lib/upload-limits";
 
 // TODA acción de este archivo exige sesión de atleta (requireAthlete) y solo actúa sobre el atleta de la
 // sesión o sobre inscripciones donde él participa. cuenta/actions.test.ts lo verifica.
@@ -238,7 +239,7 @@ export async function uploadDeclaration(registrationId: string, fd: FormData): P
 
   const file = fd.get("file");
   if (!(file instanceof File) || file.size === 0) return fail("Elige el archivo PDF");
-  if (file.size > MAX_PDF_BYTES) return fail("El PDF pesa más de 5 MB");
+  if (file.size > MAX_PDF_BYTES) return fail(tooBigMessage(file.size));
   const data = Buffer.from(await file.arrayBuffer());
   if (!isPdf(data)) return fail("El archivo debe ser un PDF");
 
@@ -272,7 +273,7 @@ export async function uploadPaymentVoucher(registrationId: string, fd: FormData)
 
   const file = fd.get("file");
   if (!(file instanceof File) || file.size === 0) return fail("Elige la foto o el PDF del comprobante");
-  if (file.size > MAX_PDF_BYTES) return fail("El archivo pesa más de 5 MB");
+  if (file.size > MAX_PDF_BYTES) return fail(tooBigMessage(file.size));
   const data = Buffer.from(await file.arrayBuffer());
   const type = voucherType(data);
   if (!type) return fail("El comprobante debe ser una foto (JPG, PNG o WEBP) o un PDF");

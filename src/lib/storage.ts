@@ -40,4 +40,4 @@ export async function deletePrivateFile(fileKey: string): Promise<void> {
 
 /** ¿El contenido es realmente un PDF? (firma "%PDF-" al inicio, no solo la extensión). */
 export const isPdf = (data: Buffer) => data.subarray(0, 5).toString("latin1") === "%PDF-";
-export const MAX_PDF_BYTES = 5 * 1024 * 1024;
+export { MAX_UPLOAD_BYTES as MAX_PDF_BYTES } from "@/lib/upload-limits";

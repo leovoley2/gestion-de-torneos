@@ -16,7 +16,20 @@ const STATUS: Record<string, string> = {
   declined: "Compañero no aceptó",
   withdrawn: "Retirada",
 };
-const date = (d: Date | string | null) => (d ? new Date(d) : null);
+/**
+ * Excel no tiene zonas horarias: muestra la fecha tal cual se guarda. Se convierte la hora a la de
+ * Lima (armando la fecha con sus componentes locales) para que no aparezca 5 horas adelantada.
+ */
+const date = (d: Date | string | null) => {
+  if (!d) return null;
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Lima", year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+    }).formatToParts(new Date(d)).map((x) => [x.type, x.value]),
+  );
+  return new Date(Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second));
+};
 
 /**
  * Excel del torneo: inscripciones con datos de contacto y pagos, y la lista de duplas de cada
