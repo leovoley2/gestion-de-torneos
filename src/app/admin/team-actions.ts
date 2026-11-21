@@ -6,6 +6,7 @@ import { sql } from "@/lib/db";
 import { ROLE_INFO, type Role } from "@/lib/permissions";
 import { createActivationLink, unusablePasswordHash } from "@/lib/staff";
 import { emailLayout, escapeHtml, isEmailEnabled, sendEmail } from "@/lib/email";
+import { runBackup } from "@/lib/backup";
 
 // Equipo de la organización. TODA acción empieza con requirePermission("staff.manage"): solo el
 // administrador general invita, cambia roles o quita acceso. (actions.test.ts recorre este archivo.)
@@ -134,4 +135,14 @@ export async function sendTestEmail(): Promise<Result> {
   });
   if (!r.ok) return fail(r.error);
   return { ok: true, message: `Correo enviado a ${me.email}. Revisa tu bandeja (y la carpeta de spam).` };
+}
+
+/** Copia de seguridad en este momento (además de la automática diaria). */
+export async function createBackupNow(): Promise<Result> {
+  await requirePermission("staff.manage");
+  const r = await runBackup({ force: true });
+  revalidatePath("/admin/sistema");
+  if (!r.created) return fail(r.reason);
+  const rows = Object.values(r.counts).reduce((a, b) => a + b, 0);
+  return { ok: true, message: `Copia creada: ${rows} registros (${Math.max(1, Math.round(r.info.size / 1024))} KB).` };
 }

@@ -14,7 +14,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { href: "/admin", label: "Inicio", also: ["/admin/torneos", "/admin/categorias", "/admin/archivo"] },
     ...(can(admin.grants, "athletes.support") ? [{ href: "/admin/atletas", label: "Atletas" }] : []),
     ...(can(admin.grants, "ranking.manage") ? [{ href: "/admin/ranking", label: "Ranking" }] : []),
-    ...(can(admin.grants, "staff.manage") ? [{ href: "/admin/equipo", label: "Equipo", also: ["/admin/correos"] }] : []),
+    ...(can(admin.grants, "staff.manage") ? [{ href: "/admin/equipo", label: "Equipo", also: ["/admin/correos", "/admin/sistema"] }] : []),
     // "Correos" solo aparece en el menú si el envío no funciona; si no, se entra desde Equipo.
     ...(can(admin.grants, "staff.manage") && !isEmailEnabled() ? [{ href: "/admin/correos", label: "Correos" }] : []),
   ];

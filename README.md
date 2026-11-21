@@ -128,3 +128,10 @@ TypeScript puro, sin dependencias de base de datos ni de UI. Diseño en `../DISE
 | `resolve.ts` | Resultados → equipos de cada partido, posiciones, clasificados, podio |
 | `standings.ts` / `score.ts` | Tabla con desempates en cascada; validación de marcador FIVB |
 | `simulate.ts` | Resultados aleatorios válidos (pruebas y demo) |
+
+## Copias de seguridad y avisos de errores
+
+- **Copias**: Vercel Cron llama cada día a `/api/cron/backup` (ver `vercel.json`, 08:00 UTC = 3:00 a. m. Lima). Se guarda la base completa en Vercel Blob **privado** y se conservan las últimas 30. Desde el panel (Equipo → Sistema) el administrador general puede crear una copia al momento o descargarlas.
+- **Restaurar**: aplica las migraciones en la base de destino y luego
+  `node --env-file=<.env> scripts/restore-backup.mjs <copia.json.gz> --confirmar <host>` (reemplaza todos los datos).
+- **Errores**: `src/instrumentation.ts` registra las fallas del servidor en `error_events` y avisa por correo a los administradores generales (máximo un aviso por hora por error). Se ven en Equipo → Sistema.
