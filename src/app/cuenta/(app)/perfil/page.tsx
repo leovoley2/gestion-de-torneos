@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getAthlete } from "@/lib/athlete-auth";
 import { PageTitle } from "@/components/AdminUI";
 import { ProfileForm } from "./ProfileForm";
+import { DeleteAccount } from "./DeleteAccount";
 
 export const metadata = { title: "Mi perfil · Vóley Playa" };
 
@@ -16,6 +17,7 @@ export default async function PerfilPage() {
         </p>
       </PageTitle>
       <ProfileForm athlete={me} />
+      <DeleteAccount />
     </div>
   );
 }

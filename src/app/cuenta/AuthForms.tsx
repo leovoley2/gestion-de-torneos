@@ -29,6 +29,19 @@ export function SignUpForm({ next }: { next: string }) {
       <Field label="Contraseña" hint="Mínimo 8 caracteres.">
         <input name="password" type="password" required minLength={8} autoComplete="new-password" className="input" />
       </Field>
+      <label className="flex items-start gap-2.5 text-sm text-navy-600">
+        <input name="accept_privacy" type="checkbox" required className="mt-0.5 size-4 shrink-0 accent-sky-600" />
+        <span>
+          Acepto la{" "}
+          <a href="/privacidad" target="_blank" className="font-semibold text-sky-700 underline underline-offset-2">
+            Política de privacidad
+          </a>{" "}
+          y autorizo el tratamiento de mis datos para gestionar mis inscripciones y publicar mis resultados.
+        </span>
+      </label>
+      <p className="text-xs text-navy-400">
+        Si el atleta tiene menos de 14 años, su padre, madre o apoderado debe crear la cuenta con él.
+      </p>
       <FormMessage state={state} />
       <button disabled={pending} className="btn-primary w-full py-2.5">
         {pending ? "Creando cuenta…" : "Crear cuenta"}

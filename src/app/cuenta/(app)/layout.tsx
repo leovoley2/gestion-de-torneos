@@ -5,6 +5,8 @@ import { isEmailEnabled } from "@/lib/email";
 import { Wordmark } from "@/components/Brand";
 import { signOutAction } from "../auth-actions";
 import { ResendVerification } from "./ResendVerification";
+import { AcceptPrivacy } from "./AcceptPrivacy";
+import { POLICY_VERSION } from "@/lib/legal";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +20,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
   const me = await getAthlete();
   if (!me) redirect("/cuenta/ingresar");
   const needsVerification = isEmailEnabled() && !me.email_verified_at;
+  const needsPrivacy = me.privacy_version !== POLICY_VERSION;
 
   return (
     <div className="min-h-screen">
@@ -48,7 +51,26 @@ export default async function AccountLayout({ children }: { children: React.Reac
           </div>
         </div>
       )}
+      {needsPrivacy && (
+        <div className="border-b border-sky-200 bg-sky-50">
+          <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm text-navy-800 sm:px-6">
+            <span>
+              Publicamos nuestra{" "}
+              <Link href="/privacidad" target="_blank" className="font-semibold text-sky-700 underline underline-offset-2">
+                Política de privacidad
+              </Link>
+              . Para inscribirte necesitamos que la aceptes.
+            </span>
+            <AcceptPrivacy />
+          </div>
+        </div>
+      )}
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">{children}</main>
+      <footer className="mx-auto max-w-5xl px-4 pb-10 text-xs text-navy-300 sm:px-6">
+        <Link href="/privacidad" className="hover:text-navy-600">
+          Política de privacidad
+        </Link>
+      </footer>
     </div>
   );
 }

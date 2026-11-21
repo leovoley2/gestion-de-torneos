@@ -5,8 +5,10 @@ import { SignInForm } from "../AuthForms";
 
 export const metadata = { title: "Ingresar · Atletas · Vóley Playa" };
 
-export default async function IngresarPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
-  const next = safeNext((await searchParams).next, "/cuenta", "/cuenta");
+export default async function IngresarPage({ searchParams }: { searchParams: Promise<{ next?: string; cuenta?: string }> }) {
+  const sp = await searchParams;
+  const next = safeNext(sp.next, "/cuenta", "/cuenta");
+  const deleted = sp.cuenta === "eliminada";
   return (
     <AuthCard
       title="Ingresa a tu cuenta"
@@ -27,6 +29,11 @@ export default async function IngresarPage({ searchParams }: { searchParams: Pro
         </>
       }
     >
+      {deleted && (
+        <p role="status" className="mt-4 rounded-lg bg-sky-50 px-3 py-2 text-sm text-navy-700">
+          Tu cuenta y tus datos personales fueron eliminados.
+        </p>
+      )}
       <SignInForm next={next} />
     </AuthCard>
   );

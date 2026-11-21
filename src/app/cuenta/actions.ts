@@ -2,12 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getAthlete, requireAthlete, sendVerificationEmail } from "@/lib/athlete-auth";
+import { getAthlete, requireAthlete, sendVerificationEmail, athleteLogout } from "@/lib/athlete-auth";
+import { verifyPassword } from "@/lib/password";
+import { POLICY_VERSION } from "@/lib/legal";
 import {
   DOCUMENT_TYPES,
   eligibilityIssues,
   fullName,
   isMinor,
+  needsGuardianConsent,
   profileIssues,
   registrationClosedReason,
   type Athlete,
@@ -49,6 +52,12 @@ export async function updateProfile(_: Result | null, fd: FormData): Promise<Res
   if (!firstName || !lastName) return fail("Escribe tus nombres y apellidos");
   const documentNumber = optional(fd, "document_number")?.toUpperCase().replace(/\s+/g, "") ?? null;
   if (documentNumber && !/^[A-Z0-9-]{5,20}$/.test(documentNumber)) return fail("Número de documento inválido");
+  // Menores de 14: el apoderado debe autorizar el tratamiento de los datos (Ley 29733).
+  const under14 = needsGuardianConsent({ birthdate, guardian_consent_at: null });
+  const guardianConsent = fd.get("guardian_consent") === "on";
+  if (under14 && !guardianConsent && !me.guardian_consent_at) {
+    return fail("El padre, madre o apoderado debe marcar la autorización del tratamiento de datos");
+  }
 
   try {
     await sql`
@@ -59,6 +68,7 @@ export async function updateProfile(_: Result | null, fd: FormData): Promise<Res
         phone = ${optional(fd, "phone")}, city = ${optional(fd, "city")}, club = ${optional(fd, "club")},
         guardian_name = ${optional(fd, "guardian_name")}, guardian_document = ${optional(fd, "guardian_document")},
         guardian_phone = ${optional(fd, "guardian_phone")}, guardian_relationship = ${optional(fd, "guardian_relationship")},
+        guardian_consent_at = ${under14 ? (me.guardian_consent_at ? sql`guardian_consent_at` : sql`now()`) : null},
         updated_at = now()
       where id = ${me.id}`;
   } catch (e) {
@@ -93,8 +103,14 @@ export async function resendVerification(): Promise<Result> {
 
 const label = (a: Athlete) => fullName(a) || a.email || "Atleta";
 
+/** Para inscribirse hay que haber aceptado la versión vigente de la Política de privacidad. */
+const privacyMissing = (a: Athlete) =>
+  a.privacy_version === POLICY_VERSION ? null : "Primero acepta la Política de privacidad (aviso arriba de la página)";
+
 export async function createRegistration(_: Result | null, fd: FormData): Promise<Result> {
   const me = await requireAthlete();
+  const noPrivacy = privacyMissing(me);
+  if (noPrivacy) return fail(noPrivacy);
   const categoryId = text(fd, "category_id");
   if (!isUuid(categoryId)) return fail("Elige una categoría");
   const category = await getRegCategory(categoryId);
@@ -160,6 +176,8 @@ export async function respondInvitation(registrationId: string, accept: boolean)
   if (reg.status !== "pending_partner") return fail("Esta invitación ya fue respondida");
 
   if (accept) {
+    const noPrivacy = privacyMissing(me);
+    if (noPrivacy) return fail(noPrivacy);
     const closed = registrationClosedReason(rulesOf(reg.category), reg.category.published);
     if (closed) return fail(closed);
     const myIssues = profileIssues(me, reg.category.start_date);
@@ -234,4 +252,46 @@ export async function uploadDeclaration(registrationId: string, fd: FormData): P
   if (old && old.file_key !== key) await deletePrivateFile(old.file_key);
   revalidatePath(`/cuenta/inscripciones/${reg.id}`);
   return { ok: true, message: "Declaración jurada subida" };
+}
+
+// ───────── Privacidad ─────────
+
+/** Acepta la versión vigente de la Política de privacidad (cuentas creadas antes de que existiera). */
+export async function acceptPrivacy(): Promise<Result> {
+  const me = await getAthlete();
+  if (!me) throw new Error("Inicia sesión con tu cuenta de atleta");
+  await sql`update athletes set privacy_accepted_at = now(), privacy_version = ${POLICY_VERSION} where id = ${me.id}`;
+  revalidatePath("/cuenta", "layout");
+  return { ok: true, message: "Gracias. Política aceptada." };
+}
+
+/**
+ * Elimina la cuenta y los datos personales (derecho de cancelación). Pide la contraseña.
+ * Los resultados quedan como registro histórico con el nombre escrito en la dupla; el vínculo con la
+ * cuenta (y sus puntos individuales de ranking) desaparece. No se puede con inscripciones en curso.
+ */
+export async function deleteAccount(_: Result | null, fd: FormData): Promise<Result> {
+  const me = await getAthlete();
+  if (!me) throw new Error("Inicia sesión con tu cuenta de atleta");
+  const [row] = await sql<{ password_hash: string }[]>`select password_hash from athletes where id = ${me.id}`;
+  if (!row || !(await verifyPassword(String(fd.get("password") ?? ""), row.password_hash))) {
+    return fail("La contraseña no es correcta");
+  }
+  const [{ active }] = await sql<{ active: number }[]>`
+    select count(*)::int as active from registrations r join categories c on c.id = r.category_id
+    where (r.athlete1_id = ${me.id} or r.athlete2_id = ${me.id})
+      and (r.status in ('pending_partner', 'pending_review') or (r.status = 'accepted' and c.status <> 'finished'))`;
+  if (active > 0) {
+    return fail(
+      "Tienes inscripciones pendientes o en un torneo que aún no termina. Retíralas o espera a que termine el torneo; si necesitas ayuda escribe a la organización.",
+    );
+  }
+  const files = await sql<{ file_key: string }[]>`select file_key from declarations where athlete_id = ${me.id}`;
+  for (const f of files) await deletePrivateFile(f.file_key).catch(() => {});
+  // Cascada: enlaces, inscripciones y declaraciones. Las duplas conservan el nombre escrito (athlete_id = null).
+  await sql`delete from athletes where id = ${me.id}`;
+  await sql`delete from login_attempts where email = ${me.email ?? ""}`;
+  await athleteLogout();
+  revalidatePath("/", "layout");
+  redirect("/cuenta/ingresar?cuenta=eliminada");
 }

@@ -17,10 +17,20 @@ export interface Athlete {
   guardian_document: string | null;
   guardian_phone: string | null;
   guardian_relationship: string | null;
+  privacy_accepted_at?: Date | string | null;
+  privacy_version?: string | null;
+  guardian_consent_at?: Date | string | null;
 }
 
 export const DOCUMENT_TYPES = { DNI: "DNI", CE: "Carné de extranjería", PASAPORTE: "Pasaporte" } as const;
 export const ADULT_AGE = 18;
+/** Menores de esta edad necesitan la autorización del apoderado para el tratamiento de sus datos (Ley 29733). */
+export const CONSENT_AGE = 14;
+
+/** ¿Hace falta (y falta) la autorización del apoderado? Menores de 14 años, hoy. */
+export function needsGuardianConsent(a: Pick<Athlete, "birthdate" | "guardian_consent_at">, today = todayLima()): boolean {
+  return Boolean(a.birthdate) && ageOn(a.birthdate!, today) < CONSENT_AGE;
+}
 
 export const fullName = (a: Pick<Athlete, "first_name" | "last_name">) => `${a.first_name} ${a.last_name}`.trim();
 
@@ -52,6 +62,7 @@ export function profileIssues(a: Athlete, onDate?: string | null): string[] {
     if (!a.guardian_document?.trim()) missing.push("documento del apoderado");
     if (!a.guardian_phone?.trim()) missing.push("teléfono del apoderado");
     if (!a.guardian_relationship?.trim()) missing.push("parentesco del apoderado");
+    if (needsGuardianConsent(a) && !a.guardian_consent_at) missing.push("autorización del apoderado");
   }
   return missing;
 }

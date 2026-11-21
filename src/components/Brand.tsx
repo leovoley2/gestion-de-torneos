@@ -63,8 +63,11 @@ export function SiteHeader({ children }: { children?: React.ReactNode }) {
 
 export function SiteFooter() {
   return (
-    <footer className="mx-auto max-w-6xl px-4 py-10 text-xs text-navy-300 sm:px-6">
-      Resultados oficiales cargados por la organización del torneo.
+    <footer className="mx-auto flex max-w-6xl flex-wrap justify-between gap-2 px-4 py-10 text-xs text-navy-300 sm:px-6">
+      <span>Resultados oficiales cargados por la organización del torneo.</span>
+      <Link href="/privacidad" className="hover:text-navy-600">
+        Política de privacidad
+      </Link>
     </footer>
   );
 }

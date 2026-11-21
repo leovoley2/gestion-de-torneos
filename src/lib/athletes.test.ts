@@ -3,6 +3,7 @@ import {
   ageOn,
   eligibilityIssues,
   isMinor,
+  needsGuardianConsent,
   profileIssues,
   registrationClosedReason,
   type Athlete,
@@ -99,5 +100,20 @@ describe("elegibilidad de la dupla", () => {
     expect(eligibilityIssues(rules({ min_birth_year: 2008 }), young, young)).toEqual([]);
     expect(eligibilityIssues(rules({ min_birth_year: 2008 }), young, old)).toEqual(["Rosa Núñez nació antes de 2008"]);
     expect(eligibilityIssues(rules({ max_birth_year: 2000 }), young, f1)).toHaveLength(1);
+  });
+});
+
+describe("autorización del apoderado (menores de 14)", () => {
+  const guardian = { guardian_name: "Rosa", guardian_document: "1", guardian_phone: "9", guardian_relationship: "Madre" };
+  it("se pide solo a menores de 14 años", () => {
+    expect(needsGuardianConsent({ birthdate: "2014-01-01", guardian_consent_at: null }, "2026-11-20")).toBe(true);
+    expect(needsGuardianConsent({ birthdate: "2012-11-20", guardian_consent_at: null }, "2026-11-20")).toBe(false);
+    expect(needsGuardianConsent({ birthdate: null, guardian_consent_at: null }, "2026-11-20")).toBe(false);
+  });
+  it("sin autorización el perfil queda incompleto", () => {
+    const kid = athlete({ birthdate: "2016-03-01", ...guardian });
+    expect(profileIssues(kid)).toContain("autorización del apoderado");
+    expect(profileIssues({ ...kid, guardian_consent_at: "2026-11-20" })).not.toContain("autorización del apoderado");
+    expect(profileIssues(athlete({ birthdate: "2010-03-01", ...guardian }))).not.toContain("autorización del apoderado");
   });
 });

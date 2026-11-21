@@ -25,6 +25,11 @@ export function AuthCard({
           {children}
         </div>
         {footer && <div className="mt-6 space-y-2 text-center text-sm text-sky-200">{footer}</div>}
+        <p className="mt-6 text-center text-xs text-sky-200/70">
+          <Link href="/privacidad" className="hover:text-white">
+            Política de privacidad
+          </Link>
+        </p>
       </main>
     </div>
   );

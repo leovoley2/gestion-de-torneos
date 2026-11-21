@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
+import { POLICY_VERSION } from "@/lib/legal";
 import { sql } from "@/lib/db";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { ATHLETE_COOKIE, ATHLETE_SESSION_DAYS, readSession, signSession } from "@/lib/session";
@@ -79,12 +80,14 @@ export async function signup(input: {
   password: string;
   firstName: string;
   lastName: string;
+  acceptPrivacy: boolean;
 }): Promise<SignupResult> {
   const email = normalizeEmail(input.email);
   const firstName = input.firstName.trim();
   const lastName = input.lastName.trim();
   if (!isEmail(email)) return { ok: false, error: "Escribe un correo válido" };
   if (!firstName || !lastName) return { ok: false, error: "Escribe tus nombres y apellidos" };
+  if (!input.acceptPrivacy) return { ok: false, error: "Para crear la cuenta debes aceptar la Política de privacidad" };
   if (input.password.length < MIN_PASSWORD) {
     return { ok: false, error: `La contraseña debe tener al menos ${MIN_PASSWORD} caracteres` };
   }
@@ -97,8 +100,8 @@ export async function signup(input: {
   }
 
   const [created] = await sql<Pick<Athlete, "id" | "email" | "first_name">[]>`
-    insert into athletes (email, password_hash, first_name, last_name, created_ip)
-    values (${email}, ${await hashPassword(input.password)}, ${firstName}, ${lastName}, ${ip})
+    insert into athletes (email, password_hash, first_name, last_name, created_ip, privacy_accepted_at, privacy_version)
+    values (${email}, ${await hashPassword(input.password)}, ${firstName}, ${lastName}, ${ip}, now(), ${POLICY_VERSION})
     on conflict (email) do nothing
     returning id, email, first_name`;
   if (!created) return { ok: false, error: "Ya existe una cuenta con ese correo. Ingresa o recupera tu contraseña." };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { ADULT_AGE, DOCUMENT_TYPES, ageOn, todayLima, type Athlete } from "@/lib/athletes";
+import { ADULT_AGE, CONSENT_AGE, DOCUMENT_TYPES, ageOn, todayLima, type Athlete } from "@/lib/athletes";
 import { Field, FormMessage } from "@/components/AuthCard";
 import { updateProfile } from "../../actions";
 
@@ -11,6 +11,7 @@ export function ProfileForm({ athlete }: { athlete: Athlete }) {
   const [state, action, pending] = useActionState<State, FormData>(updateProfile, null);
   const [birthdate, setBirthdate] = useState(athlete.birthdate ?? "");
   const minor = birthdate ? ageOn(birthdate, todayLima()) < ADULT_AGE : false;
+  const under14 = birthdate ? ageOn(birthdate, todayLima()) < CONSENT_AGE : false;
   const v = (k: keyof Athlete) => (athlete[k] as string | null) ?? "";
   const message = state ? (state.ok ? { ok: state.message } : { error: state.error }) : null;
 
@@ -104,6 +105,25 @@ export function ProfileForm({ athlete }: { athlete: Athlete }) {
             <input name="guardian_phone" type="tel" defaultValue={v("guardian_phone")} required={minor} className="input" />
           </Field>
         </div>
+        {under14 && (
+          <label className="flex items-start gap-2.5 rounded-lg bg-sky-50 px-3 py-2.5 text-sm text-navy-700">
+            <input
+              name="guardian_consent"
+              type="checkbox"
+              defaultChecked={Boolean(athlete.guardian_consent_at)}
+              required={!athlete.guardian_consent_at}
+              className="mt-0.5 size-4 shrink-0 accent-sky-600"
+            />
+            <span>
+              Soy el padre, madre o apoderado de este atleta menor de {CONSENT_AGE} años y autorizo el tratamiento de sus
+              datos según la{" "}
+              <a href="/privacidad" target="_blank" className="font-semibold text-sky-700 underline">
+                Política de privacidad
+              </a>
+              .
+            </span>
+          </label>
+        )}
       </section>
 
       <div className="flex flex-wrap items-center gap-3">

@@ -17,7 +17,7 @@ const field = (fd: FormData, k: string) => String(fd.get(k) ?? "");
 
 export async function signUpAction(_: FormState, fd: FormData): Promise<FormState> {
   const values = { email: field(fd, "email"), firstName: field(fd, "firstName"), lastName: field(fd, "lastName") };
-  const r = await signup({ ...values, password: field(fd, "password") });
+  const r = await signup({ ...values, password: field(fd, "password"), acceptPrivacy: fd.get("accept_privacy") === "on" });
   if (!r.ok) return { error: r.error, values };
   redirect(safeNext(fd.get("next"), "/cuenta/perfil", "/cuenta"));
 }
