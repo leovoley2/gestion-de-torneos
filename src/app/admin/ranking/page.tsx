@@ -17,8 +17,10 @@ export default async function AdminRankingPage() {
     getRankings(),
     getPointTables(),
     sql<{ ranking_id: string; n: number; finished: number }[]>`
-      select ranking_id, count(*)::int as n, count(*) filter (where status = 'finished')::int as finished
-      from categories where ranking_id is not null group by ranking_id`,
+      select c.ranking_id, count(*)::int as n,
+        count(*) filter (where c.status = 'finished' and t.published)::int as finished
+      from categories c join tournaments t on t.id = c.tournament_id
+      where c.ranking_id is not null group by c.ranking_id`,
   ]);
   const used = new Map(usage.map((u) => [u.ranking_id, u]));
 
@@ -27,7 +29,7 @@ export default async function AdminRankingPage() {
       <PageTitle eyebrow="Panel de administración" title="Ranking del circuito">
         <p className="mt-2 max-w-2xl text-sm text-navy-400">
           Cada categoría de torneo indica a qué ranking suma y con qué tabla de puntos. Al terminar, los puntos de cada
-          dupla se reparten por la mitad entre sus dos jugadores. El ranking se actualiza solo.
+          dupla se reparten por la mitad entre sus dos jugadores. Solo suman los torneos publicados. El ranking se actualiza solo.
         </p>
       </PageTitle>
 
@@ -44,7 +46,7 @@ export default async function AdminRankingPage() {
                       {r.name} <span className="font-normal text-navy-400">· {r.season}</span>
                     </p>
                     <p className="text-sm text-navy-400">
-                      {GENDER_LABEL[r.gender]} · {u ? `${u.finished} de ${u.n} categorías terminadas suman` : "ninguna categoría suma todavía"}
+                      {GENDER_LABEL[r.gender]} · {u ? `${u.finished} de ${u.n} categorías terminadas y publicadas suman` : "ninguna categoría suma todavía"}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">

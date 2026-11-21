@@ -5,7 +5,7 @@ import { sql } from "@/lib/db";
 import { finalStandings, tieSizes } from "@/lib/engine";
 import { buildRanking, pairPointsFor, teamPoints, type CategoryResult, type PointRow, type RankingRow } from "@/lib/ranking-calc";
 
-// El ranking se calcula al vuelo desde las categorías TERMINADAS que suman a él: posiciones finales
+// El ranking se calcula al vuelo desde las categorías TERMINADAS de torneos PUBLICADOS que suman a él: posiciones finales
 // (calculadas o corregidas a mano) → tabla de puntos → mitad para cada jugador. Si se corrige un
 // resultado o una posición, el ranking cambia solo.
 
@@ -88,6 +88,7 @@ export async function computeRanking(rankingId: string): Promise<RankingView | n
     select c.id, c.name, t.name as tournament_name, t.start_date
     from categories c join tournaments t on t.id = c.tournament_id
     where c.ranking_id = ${rankingId} and c.status = 'finished' and c.point_table_id is not null
+      and t.published -- un torneo en borrador no suma puntos hasta que se publique
     order by t.start_date nulls last`;
 
   const results: CategoryResult[] = [];
