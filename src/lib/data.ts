@@ -16,6 +16,7 @@ export interface Tournament {
   start_date: string | null;
   end_date: string | null;
   published: boolean;
+  payment_instructions?: string | null;
 }
 
 export interface Category {

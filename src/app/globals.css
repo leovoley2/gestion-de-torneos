@@ -171,3 +171,13 @@ body {
     opacity: 0;
   }
 }
+
+/* Páginas para imprimir: la llave se achica (zoom calculado por la página) para entrar en la hoja. */
+@media print {
+  .print-zoom {
+    zoom: var(--print-zoom, 1);
+  }
+  body {
+    background: #fff !important;
+  }
+}

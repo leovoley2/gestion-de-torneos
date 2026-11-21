@@ -4,7 +4,7 @@ import { getAthlete } from "@/lib/athlete-auth";
 import { profileIssues } from "@/lib/athletes";
 import { GENDER_LABEL } from "@/lib/data";
 import { formatRange } from "@/lib/format";
-import { getOpenCategories, type RegCategory } from "@/lib/registrations";
+import { feeOf, formatSoles, getOpenCategories, type RegCategory } from "@/lib/registrations";
 import { PageTitle } from "@/components/AdminUI";
 import { RegisterForm } from "./RegisterForm";
 
@@ -23,6 +23,7 @@ export default async function InscribirmePage({ searchParams }: { searchParams: 
   const options = open.map((c) => {
     const rules = [
       GENDER_LABEL[c.gender],
+      feeOf(c) !== null && `inscripción ${formatSoles(feeOf(c)!)} por dupla`,
       c.min_birth_year && `nacidos desde ${c.min_birth_year}`,
       c.max_birth_year && `nacidos hasta ${c.max_birth_year}`,
       c.max_teams && `${Math.max(c.max_teams - c.accepted, 0)} cupos libres de ${c.max_teams}`,

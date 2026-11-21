@@ -10,7 +10,7 @@ export const RESPONSIBLE = {
   site: "torneosvoleibolplaya.com",
 } as const;
 
-export const POLICY_VERSION = "2026-11-20";
-export const POLICY_DATE_LABEL = "20 de noviembre de 2026";
+export const POLICY_VERSION = "2026-11-21";
+export const POLICY_DATE_LABEL = "21 de noviembre de 2026";
 
 export { CONSENT_AGE } from "@/lib/athletes";

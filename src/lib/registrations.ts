@@ -24,6 +24,8 @@ export interface RegCategory {
   end_date: string | null;
   published: boolean;
   accepted: number;
+  registration_fee: string | null; // numeric de Postgres llega como texto ("50.00")
+  payment_instructions: string | null;
 }
 
 export interface Declaration {
@@ -39,6 +41,10 @@ export interface Registration {
   admin_note: string | null;
   created_at: Date | string;
   team_id: string | null;
+  payment_file_name: string | null;
+  payment_file_type: string | null;
+  payment_uploaded_at: Date | string | null;
+  paid_at: Date | string | null;
   category: RegCategory;
   athlete1: Athlete;
   athlete2: Athlete;
@@ -65,7 +71,7 @@ const CATEGORY_SELECT = sql`
   c.id, c.name, c.gender, c.registration_open, c.registration_deadline, c.max_teams,
   c.min_birth_year, c.max_birth_year, (c.format is not null) as has_format,
   t.id as tournament_id, t.name as tournament_name, t.city as tournament_city,
-  t.start_date, t.end_date, t.published,
+  t.start_date, t.end_date, t.published, c.registration_fee, t.payment_instructions,
   (select count(*)::int from registrations r where r.category_id = c.id and r.status = 'accepted') as accepted`;
 
 export async function getRegCategory(categoryId: string): Promise<RegCategory | null> {
@@ -107,7 +113,8 @@ async function hydrate(rows: { id: string; category_id: string; athlete1_id: str
   }));
 }
 
-const REG_COLUMNS = sql`id, category_id, athlete1_id, athlete2_id, status, admin_note, created_at, team_id`;
+const REG_COLUMNS = sql`id, category_id, athlete1_id, athlete2_id, status, admin_note, created_at, team_id,
+  payment_file_name, payment_file_type, payment_uploaded_at, paid_at`;
 
 export async function getRegistration(id: string): Promise<Registration | null> {
   const rows = await sql<{ id: string; category_id: string; athlete1_id: string; athlete2_id: string }[]>`
@@ -152,4 +159,41 @@ export async function activeRegistrationConflict(categoryId: string, athleteIds:
       and id <> ${exceptId ?? "00000000-0000-0000-0000-000000000000"}
     limit 1`;
   return row?.athlete_id ?? null;
+}
+
+// ───────── Pagos ─────────
+
+export type PaymentStatus = "free" | "pending" | "submitted" | "paid";
+
+/** Monto de inscripción como número (null = gratis o sin monto definido). */
+export const feeOf = (c: Pick<RegCategory, "registration_fee">): number | null =>
+  c.registration_fee === null || Number(c.registration_fee) <= 0 ? null : Number(c.registration_fee);
+
+/** "S/ 50" o "S/ 52.50". */
+export const formatSoles = (n: number) => `S/ ${Number.isInteger(n) ? n : n.toFixed(2)}`;
+
+/**
+ * Estado del pago de una inscripción. Si la organización marcó "pagado" vale aunque no haya
+ * comprobante (pago en efectivo, por ejemplo).
+ */
+export function paymentStatus(r: Pick<Registration, "paid_at" | "payment_uploaded_at"> & { category: Pick<RegCategory, "registration_fee"> }): PaymentStatus {
+  if (r.paid_at) return "paid";
+  if (feeOf(r.category) === null) return "free";
+  return r.payment_uploaded_at ? "submitted" : "pending";
+}
+
+export const PAYMENT_LABEL: Record<PaymentStatus, string> = {
+  free: "Sin costo",
+  pending: "Pago pendiente",
+  submitted: "Comprobante enviado",
+  paid: "Pagado",
+};
+
+/** Tipo real del comprobante según sus primeros bytes (no la extensión): PDF, JPG, PNG o WEBP. */
+export function voucherType(data: Buffer): string | null {
+  if (data.subarray(0, 5).toString("latin1") === "%PDF-") return "application/pdf";
+  if (data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) return "image/jpeg";
+  if (data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
+  if (data.subarray(0, 4).toString("latin1") === "RIFF" && data.subarray(8, 12).toString("latin1") === "WEBP") return "image/webp";
+  return null;
 }

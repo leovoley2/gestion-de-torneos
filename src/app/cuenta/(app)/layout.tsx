@@ -55,7 +55,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
         <div className="border-b border-sky-200 bg-sky-50">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm text-navy-800 sm:px-6">
             <span>
-              Publicamos nuestra{" "}
+              {me.privacy_version ? "Actualizamos" : "Publicamos"} nuestra{" "}
               <Link href="/privacidad" target="_blank" className="font-semibold text-sky-700 underline underline-offset-2">
                 Política de privacidad
               </Link>

@@ -3,10 +3,10 @@ import { getAthlete } from "@/lib/athlete-auth";
 import { fullName, isMinor, type Athlete } from "@/lib/athletes";
 import { GENDER_LABEL, isUuid } from "@/lib/data";
 import { formatRange } from "@/lib/format";
-import { getRegistration } from "@/lib/registrations";
+import { PAYMENT_LABEL, feeOf, formatSoles, getRegistration, paymentStatus } from "@/lib/registrations";
 import { PageTitle } from "@/components/AdminUI";
 import { RegistrationBadge } from "@/components/RegistrationBadge";
-import { DeclarationUpload, InvitationButtons, WithdrawButton } from "../../RegistrationButtons";
+import { DeclarationUpload, InvitationButtons, VoucherUpload, WithdrawButton } from "../../RegistrationButtons";
 
 export const metadata = { title: "Inscripción · Vóley Playa" };
 
@@ -26,6 +26,9 @@ export default async function RegistrationPage({ params }: { params: Promise<{ i
   const step = reg.status === "pending_partner" ? 1 : reg.status === "pending_review" ? 2 : 3;
   const declarationOf = (a: Athlete) => reg.declarations.find((d) => d.athlete_id === a.id);
   const minors = [reg.athlete1, reg.athlete2].filter((a) => isMinor(a, c.start_date));
+  const fee = feeOf(c);
+  const pay = paymentStatus(reg);
+  const canPay = ["pending_partner", "pending_review", "accepted"].includes(reg.status) && pay !== "paid";
 
   return (
     <div className="space-y-6">
@@ -85,6 +88,39 @@ export default async function RegistrationPage({ params }: { params: Promise<{ i
           <p className="mt-4 text-sm text-navy-400">Esperando que {fullName(reg.athlete2) || "tu compañero"} confirme desde su cuenta.</p>
         )}
       </section>
+
+      {(fee !== null || pay === "paid") && (
+        <section className="card space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="font-semibold text-navy-900">Pago de la inscripción</h2>
+              {fee !== null && <p className="mt-0.5 text-sm text-navy-500">Monto por dupla: <strong>{formatSoles(fee)}</strong></p>}
+            </div>
+            <span
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${
+                pay === "paid"
+                  ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                  : pay === "submitted"
+                    ? "bg-sky-50 text-sky-700 ring-sky-200"
+                    : "bg-amber-50 text-amber-800 ring-amber-200"
+              }`}
+            >
+              {PAYMENT_LABEL[pay]}
+            </span>
+          </div>
+          {pay !== "paid" && c.payment_instructions && (
+            <div className="rounded-xl bg-sky-50/60 px-4 py-3 text-sm whitespace-pre-line text-navy-700">{c.payment_instructions}</div>
+          )}
+          {pay === "submitted" && <p className="text-sm text-navy-500">Enviaste el comprobante; la organización lo revisará.</p>}
+          {pay === "paid" && <p className="text-sm text-emerald-700">La organización confirmó el pago. ¡Gracias!</p>}
+          {reg.payment_file_name && (
+            <a href={`/api/comprobantes/${reg.id}`} target="_blank" className="block text-sm font-semibold text-sky-600">
+              Ver el comprobante enviado ↗
+            </a>
+          )}
+          {canPay && <VoucherUpload registrationId={reg.id} hasFile={Boolean(reg.payment_file_name)} />}
+        </section>
+      )}
 
       {minors.length > 0 && (
         <section className="card space-y-4">

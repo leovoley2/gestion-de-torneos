@@ -23,7 +23,9 @@ import {
   findAthleteByEmailOrDocument,
   getRegCategory,
   getRegistration,
+  paymentStatus,
   rulesOf,
+  voucherType,
 } from "@/lib/registrations";
 import { MAX_PDF_BYTES, deletePrivateFile, isPdf, savePrivateFile } from "@/lib/storage";
 
@@ -254,6 +256,40 @@ export async function uploadDeclaration(registrationId: string, fd: FormData): P
   return { ok: true, message: "Declaración jurada subida" };
 }
 
+// ───────── Pago de la inscripción ─────────
+
+const VOUCHER_EXT: Record<string, string> = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+
+/** Sube (o reemplaza) el comprobante de pago. Cualquiera de los dos atletas puede hacerlo. */
+export async function uploadPaymentVoucher(registrationId: string, fd: FormData): Promise<Result> {
+  const me = await requireAthlete();
+  const reg = await myRegistration(registrationId, me);
+  if (!reg) return fail("Inscripción no encontrada");
+  if (!["pending_partner", "pending_review", "accepted"].includes(reg.status)) return fail("Esta inscripción ya no admite cambios");
+  const status = paymentStatus(reg);
+  if (status === "free") return fail("Esta categoría no tiene costo de inscripción");
+  if (status === "paid") return fail("La organización ya confirmó el pago");
+
+  const file = fd.get("file");
+  if (!(file instanceof File) || file.size === 0) return fail("Elige la foto o el PDF del comprobante");
+  if (file.size > MAX_PDF_BYTES) return fail("El archivo pesa más de 5 MB");
+  const data = Buffer.from(await file.arrayBuffer());
+  const type = voucherType(data);
+  if (!type) return fail("El comprobante debe ser una foto (JPG, PNG o WEBP) o un PDF");
+
+  const key = await savePrivateFile(`pagos/${reg.id}.${VOUCHER_EXT[type]}`, data, type);
+  const name = file.name.replace(/[^\w .()-]/g, "_").slice(0, 120) || `comprobante.${VOUCHER_EXT[type]}`;
+  const [old] = await sql<{ payment_file_key: string | null }[]>`select payment_file_key from registrations where id = ${reg.id}`;
+  await sql`
+    update registrations set payment_file_key = ${key}, payment_file_name = ${name}, payment_file_type = ${type},
+      payment_uploaded_at = now()
+    where id = ${reg.id}`;
+  if (old?.payment_file_key && old.payment_file_key !== key) await deletePrivateFile(old.payment_file_key);
+  revalidatePath(`/cuenta/inscripciones/${reg.id}`);
+  revalidatePath(`/admin/categorias/${reg.category.id}`);
+  return { ok: true, message: "Comprobante enviado. La organización lo revisará." };
+}
+
 // ───────── Privacidad ─────────
 
 /** Acepta la versión vigente de la Política de privacidad (cuentas creadas antes de que existiera). */
@@ -286,7 +322,11 @@ export async function deleteAccount(_: Result | null, fd: FormData): Promise<Res
       "Tienes inscripciones pendientes o en un torneo que aún no termina. Retíralas o espera a que termine el torneo; si necesitas ayuda escribe a la organización.",
     );
   }
-  const files = await sql<{ file_key: string }[]>`select file_key from declarations where athlete_id = ${me.id}`;
+  const files = await sql<{ file_key: string }[]>`
+    select file_key from declarations where athlete_id = ${me.id}
+    union all
+    select payment_file_key from registrations
+    where payment_file_key is not null and (athlete1_id = ${me.id} or athlete2_id = ${me.id})`;
   for (const f of files) await deletePrivateFile(f.file_key).catch(() => {});
   // Cascada: enlaces, inscripciones y declaraciones. Las duplas conservan el nombre escrito (athlete_id = null).
   await sql`delete from athletes where id = ${me.id}`;

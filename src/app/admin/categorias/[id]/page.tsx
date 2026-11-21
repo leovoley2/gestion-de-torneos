@@ -47,11 +47,18 @@ export default async function AdminCategory({ params }: { params: Promise<{ id: 
         eyebrow={GENDER_LABEL[category.gender]}
         title={category.name}
         actions={
-          tournament.published && (
-            <Link href={`/torneos/${tournament.id}/${category.id}`} target="_blank" className="btn">
-              Ver público ↗
-            </Link>
-          )
+          <>
+            {hasFormat && (
+              <Link href={`/admin/categorias/${category.id}/imprimir`} className="btn">
+                Imprimir llaves
+              </Link>
+            )}
+            {tournament.published && (
+              <Link href={`/torneos/${tournament.id}/${category.id}`} target="_blank" className="btn">
+                Ver público ↗
+              </Link>
+            )}
+          </>
         }
       />
 

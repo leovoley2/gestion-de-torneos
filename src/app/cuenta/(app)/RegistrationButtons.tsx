@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { respondInvitation, uploadDeclaration, withdrawRegistration } from "../actions";
+import { respondInvitation, uploadDeclaration, uploadPaymentVoucher, withdrawRegistration } from "../actions";
 
 type Msg = { ok: boolean; text: string } | null;
 
@@ -100,6 +100,42 @@ export function DeclarationUpload({ registrationId, hasFile }: { registrationId:
       <p className="text-xs text-navy-400">PDF firmado por el padre, madre o apoderado. Máximo 5 MB.</p>
       <button className="btn-primary" disabled={pending}>
         {pending ? "Subiendo…" : hasFile ? "Reemplazar PDF" : "Subir PDF"}
+      </button>
+      <Message msg={msg} />
+    </form>
+  );
+}
+
+export function VoucherUpload({ registrationId, hasFile }: { registrationId: string; hasFile: boolean }) {
+  const [msg, setMsg] = useState<Msg>(null);
+  const [pending, start] = useTransition();
+  const formRef = useRef<HTMLFormElement>(null);
+  const router = useRouter();
+  return (
+    <form
+      ref={formRef}
+      className="space-y-3"
+      action={(fd) =>
+        start(async () => {
+          const r = await uploadPaymentVoucher(registrationId, fd);
+          setMsg(r.ok ? { ok: true, text: r.message ?? "Listo" } : { ok: false, text: r.error });
+          if (r.ok) {
+            formRef.current?.reset();
+            router.refresh();
+          }
+        })
+      }
+    >
+      <input
+        type="file"
+        name="file"
+        accept="image/jpeg,image/png,image/webp,application/pdf"
+        required
+        className="block w-full text-sm text-navy-700 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-navy-800"
+      />
+      <p className="text-xs text-navy-400">Captura de Yape o foto/PDF de la transferencia. Máximo 5 MB.</p>
+      <button className="btn-primary" disabled={pending}>
+        {pending ? "Subiendo…" : hasFile ? "Reemplazar comprobante" : "Subir comprobante"}
       </button>
       <Message msg={msg} />
     </form>

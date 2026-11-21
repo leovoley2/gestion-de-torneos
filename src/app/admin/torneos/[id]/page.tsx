@@ -51,6 +51,16 @@ export default async function AdminTournament({
         }
         actions={
           <>
+            {(canEdit || can(admin.grants, "results.edit", id)) && (
+              <Link href={`/admin/torneos/${t.id}/hoja`} className="btn">
+                Hoja por cancha
+              </Link>
+            )}
+            {can(admin.grants, "registrations.review", id) && (
+              <a href={`/api/admin/torneos/${t.id}/inscritos`} className="btn">
+                Excel de inscritos
+              </a>
+            )}
             {t.published && (
               <Link href={`/torneos/${t.id}`} className="btn" target="_blank">
                 Ver público ↗
@@ -229,6 +239,22 @@ export default async function AdminTournament({
                   />
                 </label>
               </div>
+              <label className="block text-sm">
+                <span className="mb-1.5 block font-medium text-navy-700">
+                  Cómo pagar la inscripción
+                </span>
+                <textarea
+                  name="payment_instructions"
+                  defaultValue={t.payment_instructions ?? ""}
+                  rows={3}
+                  maxLength={1000}
+                  placeholder={"Ej. Yape al 999 999 999 (Federación)\nBCP cta. 191-..., CCI ..."}
+                  className="input"
+                />
+                <span className="mt-1 block text-xs text-navy-400">
+                  Lo ven los atletas al inscribirse. El monto se define en cada categoría.
+                </span>
+              </label>
               <button className="btn w-full">Guardar datos</button>
             </form>
 

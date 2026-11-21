@@ -1,7 +1,17 @@
 import { ageOn, eligibilityIssues, fullName, isMinor, profileIssues, todayLima, type Athlete } from "@/lib/athletes";
-import { getCategoryRegistrations, getRegCategory, missingDeclarations, rulesOf, type Registration } from "@/lib/registrations";
+import {
+  PAYMENT_LABEL,
+  feeOf,
+  formatSoles,
+  getCategoryRegistrations,
+  getRegCategory,
+  missingDeclarations,
+  paymentStatus,
+  rulesOf,
+  type Registration,
+} from "@/lib/registrations";
 import { RegistrationBadge } from "@/components/RegistrationBadge";
-import { RegistrationDecision, RegistrationSettingsForm } from "./RegistrationControls";
+import { PaymentToggle, RegistrationDecision, RegistrationSettingsForm } from "./RegistrationControls";
 
 const toLocalInput = (d: Date | string | null) => {
   if (!d) return "";
@@ -52,13 +62,14 @@ export async function RegistrationsSection({
             maxTeams: category.max_teams?.toString() ?? "",
             minYear: category.min_birth_year?.toString() ?? "",
             maxYear: category.max_birth_year?.toString() ?? "",
+            fee: category.registration_fee !== null ? String(Number(category.registration_fee)) : "",
           }}
         />
       ) : null}
 
       <ul className="space-y-3">
         {active.map((r) => (
-          <RegistrationCard key={r.id} reg={r} editable={canReview && !category.has_format} />
+          <RegistrationCard key={r.id} reg={r} editable={canReview && !category.has_format} canPay={canReview} />
         ))}
         {active.length === 0 && <li className="text-sm text-navy-400">No hay inscripciones pendientes.</li>}
       </ul>
@@ -68,7 +79,7 @@ export async function RegistrationsSection({
           <summary className="cursor-pointer text-sm font-medium text-navy-500">Historial ({history.length})</summary>
           <ul className="mt-3 space-y-3">
             {history.map((r) => (
-              <RegistrationCard key={r.id} reg={r} editable={false} />
+              <RegistrationCard key={r.id} reg={r} editable={false} canPay={canReview && r.status === "accepted"} />
             ))}
           </ul>
         </details>
@@ -77,7 +88,7 @@ export async function RegistrationsSection({
   );
 }
 
-function RegistrationCard({ reg, editable }: { reg: Registration; editable: boolean }) {
+function RegistrationCard({ reg, editable, canPay }: { reg: Registration; editable: boolean; canPay: boolean }) {
   const c = reg.category;
   const problems =
     reg.status === "pending_review"
@@ -101,6 +112,7 @@ function RegistrationCard({ reg, editable }: { reg: Registration; editable: bool
           <AthleteSummary key={a.id} athlete={a} reg={reg} />
         ))}
       </div>
+      <PaymentRow reg={reg} canPay={canPay} />
       {reg.admin_note && <p className="mt-3 text-sm text-navy-500">Nota: {reg.admin_note}</p>}
       {problems.length > 0 && (
         <ul className="mt-3 list-disc space-y-0.5 rounded-lg bg-amber-50 py-2 pr-3 pl-7 text-sm text-amber-900">
@@ -157,6 +169,34 @@ function AthleteSummary({ athlete: a, reg }: { athlete: Athlete; reg: Registrati
             <span className="font-semibold text-amber-700">Declaración jurada pendiente</span>
           )}
         </p>
+      )}
+    </div>
+  );
+}
+
+function PaymentRow({ reg, canPay }: { reg: Registration; canPay: boolean }) {
+  const status = paymentStatus(reg);
+  if (status === "free") return null;
+  const fee = feeOf(reg.category);
+  const tone =
+    status === "paid"
+      ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+      : status === "submitted"
+        ? "bg-sky-50 text-sky-700 ring-sky-200"
+        : "bg-amber-50 text-amber-800 ring-amber-200";
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-white px-3 py-2 text-sm ring-1 ring-navy-100/70">
+      <span className="font-medium text-navy-700">Pago{fee !== null ? ` · ${formatSoles(fee)}` : ""}</span>
+      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ${tone}`}>{PAYMENT_LABEL[status]}</span>
+      {reg.payment_file_name && (
+        <a href={`/api/comprobantes/${reg.id}`} target="_blank" className="text-xs font-semibold text-sky-600">
+          Ver comprobante ↗
+        </a>
+      )}
+      {canPay && (
+        <span className="ml-auto">
+          <PaymentToggle registrationId={reg.id} paid={status === "paid"} />
+        </span>
       )}
     </div>
   );

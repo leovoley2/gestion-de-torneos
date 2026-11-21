@@ -59,7 +59,8 @@ export async function updateTournament(id: string, formData: FormData) {
   if (!name) throw new Error("El torneo necesita un nombre");
   await sql`
     update tournaments set name = ${name}, city = ${optional(formData.get("city"))},
-      start_date = ${optional(formData.get("start_date"))}, end_date = ${optional(formData.get("end_date"))}
+      start_date = ${optional(formData.get("start_date"))}, end_date = ${optional(formData.get("end_date"))},
+      payment_instructions = ${optional(formData.get("payment_instructions"))?.slice(0, 1000) ?? null}
     where id = ${id}`;
   refresh(undefined, id);
 }
@@ -86,12 +87,13 @@ export async function duplicateTournament(id: string, formData: FormData) {
     const [src] = await tx<{ city: string | null }[]>`select city from tournaments where id = ${id}`;
     if (!src) throw new Error("Torneo no encontrado");
     const [t] = await tx<{ id: string }[]>`
-      insert into tournaments (name, city, start_date, end_date)
-      values (${name}, ${optional(formData.get("city")) ?? src.city}, ${optional(formData.get("start_date"))}, ${optional(formData.get("end_date"))})
+      insert into tournaments (name, city, start_date, end_date, payment_instructions)
+      values (${name}, ${optional(formData.get("city")) ?? src.city}, ${optional(formData.get("start_date"))}, ${optional(formData.get("end_date"))},
+        (select payment_instructions from tournaments where id = ${id}))
       returning id`;
     await tx`
-      insert into categories (tournament_id, name, gender, max_teams, min_birth_year, max_birth_year, ranking_id, point_table_id, created_at)
-      select ${t.id}, name, gender, max_teams, min_birth_year, max_birth_year, ranking_id, point_table_id,
+      insert into categories (tournament_id, name, gender, max_teams, min_birth_year, max_birth_year, ranking_id, point_table_id, registration_fee, created_at)
+      select ${t.id}, name, gender, max_teams, min_birth_year, max_birth_year, ranking_id, point_table_id, registration_fee,
         now() + (row_number() over (order by created_at)) * interval '1 millisecond' -- conserva el orden
       from categories where tournament_id = ${id}`;
     return t.id;

@@ -188,9 +188,9 @@ export function StageView({
       )}
 
       {columns.size > 0 && (
-        <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0">
+        <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0 print:overflow-visible">
           {[...columns.entries()].map(([k, ms]) => (
-            <div key={k} className="w-72 shrink-0">
+            <div key={k} className="w-72 shrink-0 print:w-auto print:min-w-0 print:flex-1 print:shrink">
               <h3 className="mb-2 flex items-center gap-2 text-[11px] font-semibold tracking-wider text-navy-400 uppercase">
                 <span className="h-px flex-1 bg-navy-100" />
                 {BRACKET_NAMES[ms[0].bracket]} · R{ms[0].round}
@@ -221,7 +221,7 @@ function Side({ m, id, src, side, helpers }: { m: ResolvedMatch; id: string | nu
         className={`flex min-w-0 items-center gap-2 ${won ? "font-semibold text-navy-950" : lost ? "text-navy-400" : "text-navy-800"}`}
       >
         <span className={`size-1.5 shrink-0 rounded-full ${won ? "bg-sky-500" : "bg-transparent"}`} aria-hidden="true" />
-        <span className={`truncate ${id ? "" : "text-navy-300 italic"}`}>{id ? helpers.teamName(id) : helpers.describe(src)}</span>
+        <span className={`truncate print:whitespace-normal print:break-words ${id ? "" : "text-navy-300 italic"}`}>{id ? helpers.teamName(id) : helpers.describe(src)}</span>
       </span>
       <span className="flex shrink-0 gap-1 tabular-nums">
         {m.result?.walkoverWinner

@@ -56,6 +56,11 @@ export default function PrivacyPolicy() {
                 declaración jurada firmada (archivo PDF) que se pide para inscribirlos.
               </li>
               <li>
+                <strong>Pagos:</strong> el comprobante de pago de la inscripción (captura de Yape o foto/PDF de la
+                transferencia) y si la organización confirmó el pago. No guardamos datos de tarjetas ni de cuentas
+                bancarias.
+              </li>
+              <li>
                 <strong>Actividad deportiva:</strong> inscripciones, duplas, horarios, resultados, posiciones finales y puntos
                 de ranking.
               </li>
@@ -76,6 +81,7 @@ export default function PrivacyPolicy() {
             <ul>
               <li>Crear y administrar tu cuenta, y enviarte los correos necesarios (confirmación, contraseña, inscripciones).</li>
               <li>Gestionar inscripciones, verificar la edad y categoría, y armar duplas, grupos y llaves.</li>
+              <li>Verificar el pago de las inscripciones.</li>
               <li>Publicar resultados, posiciones y el ranking del circuito.</li>
               <li>Contactarte o contactar a tu apoderado por temas del torneo.</li>
               <li>Proteger la plataforma frente a accesos indebidos.</li>
@@ -139,7 +145,7 @@ export default function PrivacyPolicy() {
                 Los resultados, posiciones y ranking se conservan como registro histórico de las competencias, incluso si
                 eliminas tu cuenta (con tu nombre tal como figuró en el torneo).
               </li>
-              <li>Las declaraciones juradas, mientras la cuenta exista; se borran al eliminarla.</li>
+              <li>Las declaraciones juradas y los comprobantes de pago, mientras la cuenta exista; se borran al eliminarla.</li>
               <li>Los intentos de ingreso, un día.</li>
             </ul>
           </section>

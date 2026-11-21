@@ -41,6 +41,9 @@ export async function updateRegistrationSettings(categoryId: string, fd: FormDat
     if (y !== null && (!Number.isInteger(y) || y < 1900 || y > 2100)) return fail("Año de nacimiento inválido");
   }
   if (minYear && maxYear && minYear > maxYear) return fail("El año mínimo no puede ser mayor que el máximo");
+  const feeRaw = String(fd.get("registration_fee") ?? "").trim().replace(",", ".");
+  const fee = feeRaw === "" ? null : Number(feeRaw);
+  if (fee !== null && (!Number.isFinite(fee) || fee < 0 || fee > 100000)) return fail("Monto de inscripción inválido");
   const deadlineRaw = String(fd.get("registration_deadline") ?? "").trim();
   const deadline = deadlineRaw ? new Date(deadlineRaw) : null;
   if (deadline && Number.isNaN(deadline.getTime())) return fail("Fecha límite inválida");
@@ -49,7 +52,8 @@ export async function updateRegistrationSettings(categoryId: string, fd: FormDat
     update categories set
       registration_open = ${fd.get("registration_open") === "on"},
       registration_deadline = ${deadline}, max_teams = ${maxTeams},
-      min_birth_year = ${minYear}, max_birth_year = ${maxYear}
+      min_birth_year = ${minYear}, max_birth_year = ${maxYear},
+      registration_fee = ${fee === null || fee === 0 ? null : Math.round(fee * 100) / 100}
     where id = ${categoryId}`;
   refreshCategory(categoryId);
   return { ok: true, message: "Ajustes de inscripción guardados" };
@@ -197,4 +201,33 @@ export async function mergeAthleteRecord(recordId: string, fd: FormData): Promis
   revalidatePath("/admin/atletas");
   revalidatePath("/", "layout");
   return { ok: true, message: "Ficha unida a la cuenta: conserva sus duplas y puntos" };
+}
+
+// ───────── Pago ─────────
+
+/** Marca (o desmarca) la inscripción como pagada. Al confirmar el pago se avisa a los dos atletas. */
+export async function setRegistrationPaid(registrationId: string, paid: boolean): Promise<Result> {
+  const admin = await requirePermission("registrations.review", { registrationId });
+  assertId(registrationId);
+  const reg = await getRegistration(registrationId);
+  if (!reg) return fail("Inscripción no encontrada");
+  if (paid === true) {
+    if (reg.paid_at) return { ok: true, message: "Ya estaba marcada como pagada" };
+    await sql`update registrations set paid_at = now(), paid_by = ${admin.id} where id = ${reg.id}`;
+    const c = reg.category;
+    for (const a of [reg.athlete1, reg.athlete2]) {
+      await sendEmail({
+        to: a.email,
+        subject: `Pago confirmado · ${c.tournament_name}`,
+        html: emailLayout(`Hola${a.first_name ? `, ${escapeHtml(a.first_name)}` : ""}`, [
+          `La organización confirmó el pago de la inscripción de su dupla en <strong>${escapeHtml(c.tournament_name)} · ${escapeHtml(c.name)}</strong>.`,
+        ], { label: "Ver mi inscripción", url: `${appUrl()}/cuenta/inscripciones/${reg.id}` }),
+      });
+    }
+  } else {
+    await sql`update registrations set paid_at = null, paid_by = null where id = ${reg.id}`;
+  }
+  refreshCategory(reg.category.id);
+  revalidatePath(`/cuenta/inscripciones/${reg.id}`);
+  return { ok: true, message: paid ? "Pago confirmado" : "Se quitó la marca de pagado" };
 }

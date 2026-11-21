@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { acceptRegistration, rejectRegistration, updateRegistrationSettings } from "@/app/admin/registration-actions";
+import { acceptRegistration, rejectRegistration, setRegistrationPaid, updateRegistrationSettings } from "@/app/admin/registration-actions";
 
 type Msg = { ok: boolean; text: string } | null;
 const Message = ({ msg }: { msg: Msg }) =>
@@ -18,14 +18,14 @@ export function RegistrationSettingsForm({
   initial,
 }: {
   categoryId: string;
-  initial: { open: boolean; deadline: string; maxTeams: string; minYear: string; maxYear: string };
+  initial: { open: boolean; deadline: string; maxTeams: string; minYear: string; maxYear: string; fee: string };
 }) {
   const [msg, setMsg] = useState<Msg>(null);
   const [pending, start] = useTransition();
   const router = useRouter();
   return (
     <form
-      className="grid gap-3 rounded-xl bg-navy-50/50 p-4 sm:grid-cols-2 lg:grid-cols-5"
+      className="grid gap-3 rounded-xl bg-navy-50/50 p-4 sm:grid-cols-2 lg:grid-cols-6"
       action={(fd) =>
         start(async () => {
           // La fecha local se envía como ISO para no depender de la zona horaria del servidor.
@@ -37,7 +37,7 @@ export function RegistrationSettingsForm({
         })
       }
     >
-      <label className="flex items-center gap-2 text-sm font-semibold text-navy-800 sm:col-span-2 lg:col-span-5">
+      <label className="flex items-center gap-2 text-sm font-semibold text-navy-800 sm:col-span-2 lg:col-span-6">
         <input type="checkbox" name="registration_open" defaultChecked={initial.open} className="size-4 accent-navy-800" />
         Inscripciones abiertas (los atletas pueden inscribirse desde su cuenta)
       </label>
@@ -57,7 +57,11 @@ export function RegistrationSettingsForm({
         Nacidos hasta (año)
         <input type="number" name="max_birth_year" defaultValue={initial.maxYear} placeholder="—" className="input mt-1" />
       </label>
-      <div className="flex flex-wrap items-center gap-3 sm:col-span-2 lg:col-span-5">
+      <label className="block text-xs font-medium text-navy-600">
+        Monto por dupla (S/)
+        <input type="number" name="registration_fee" min={0} step="0.01" defaultValue={initial.fee} placeholder="Gratis" className="input mt-1" />
+      </label>
+      <div className="flex flex-wrap items-center gap-3 sm:col-span-2 lg:col-span-6">
         <button className="btn-primary" disabled={pending}>
           {pending ? "Guardando…" : "Guardar ajustes"}
         </button>
@@ -118,5 +122,29 @@ export function RegistrationDecision({ registrationId, canAccept }: { registrati
       )}
       <Message msg={msg} />
     </div>
+  );
+}
+
+export function PaymentToggle({ registrationId, paid }: { registrationId: string; paid: boolean }) {
+  const [msg, setMsg] = useState<Msg>(null);
+  const [pending, start] = useTransition();
+  const router = useRouter();
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <button
+        className={paid ? "btn px-3 py-1 text-xs" : "btn-primary px-3 py-1 text-xs"}
+        disabled={pending}
+        onClick={() =>
+          start(async () => {
+            const r = await setRegistrationPaid(registrationId, !paid);
+            setMsg(r.ok ? null : { ok: false, text: r.error });
+            if (r.ok) router.refresh();
+          })
+        }
+      >
+        {pending ? "…" : paid ? "Quitar «pagado»" : "Marcar pagado"}
+      </button>
+      <Message msg={msg} />
+    </span>
   );
 }
