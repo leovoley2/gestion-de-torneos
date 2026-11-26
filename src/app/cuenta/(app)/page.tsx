@@ -4,7 +4,7 @@ import { getAthlete } from "@/lib/athlete-auth";
 import { fullName, isMinor, profileIssues } from "@/lib/athletes";
 import { GENDER_LABEL } from "@/lib/data";
 import { formatRange } from "@/lib/format";
-import { getAthleteRegistrations, getOpenCategories, missingDeclarations } from "@/lib/registrations";
+import { PAYMENT_LABEL, getAthleteRegistrations, getOpenCategories, missingDeclarations, paymentStatus } from "@/lib/registrations";
 import { PageTitle } from "@/components/AdminUI";
 import { RegistrationBadge } from "@/components/RegistrationBadge";
 import { InvitationButtons } from "./RegistrationButtons";
@@ -142,6 +142,14 @@ export default async function AccountHome() {
                     {needsDeclaration && (
                       <span className="mt-1 block text-xs font-semibold text-amber-700">Falta subir tu declaración jurada</span>
                     )}
+                    {["pending_partner", "pending_review", "accepted"].includes(r.status) &&
+                      ["pending", "submitted"].includes(paymentStatus(r)) && (
+                        <span
+                          className={`mt-1 block text-xs font-semibold ${paymentStatus(r) === "pending" ? "text-amber-700" : "text-sky-700"}`}
+                        >
+                          {paymentStatus(r) === "pending" ? "Falta pagar y subir el comprobante" : PAYMENT_LABEL.submitted}
+                        </span>
+                      )}
                   </span>
                   <RegistrationBadge status={r.status} />
                 </Link>

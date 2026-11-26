@@ -35,6 +35,8 @@ export default async function InscribirmePage({ searchParams }: { searchParams: 
       detail: [c.tournament_city, formatRange(c.start_date, c.end_date)].filter(Boolean).join(" · "),
       rules: rules.join(" · "),
       full: Boolean(c.max_teams && c.accepted >= c.max_teams),
+      fee: feeOf(c) !== null ? formatSoles(feeOf(c)!) : null,
+      paymentInstructions: feeOf(c) !== null ? c.payment_instructions : null,
     };
   });
 
