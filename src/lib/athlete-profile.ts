@@ -26,6 +26,7 @@ export interface PublicAthlete {
   name: string;
   club: string | null;
   city: string | null;
+  gender: "F" | "M" | null; // solo para redactar ("campeona"/"campeón")
 }
 
 type Row = {
@@ -100,11 +101,11 @@ export async function getAthleteRankings(athleteId: string) {
  */
 export const getPublicProfile = cache(async (athleteId: string) => {
   if (!isUuid(athleteId)) return null;
-  const [a] = await sql<{ id: string; first_name: string; last_name: string; club: string | null; city: string | null }[]>`
-    select id, first_name, last_name, club, city from athletes where id = ${athleteId}`;
+  const [a] = await sql<{ id: string; first_name: string; last_name: string; club: string | null; city: string | null; gender: "F" | "M" | null }[]>`
+    select id, first_name, last_name, club, city, gender from athletes where id = ${athleteId}`;
   if (!a) return null;
   const [participations, rankings] = await Promise.all([getParticipations(a.id), getAthleteRankings(a.id)]);
   if (participations.length === 0 && rankings.length === 0) return null;
-  const athlete: PublicAthlete = { id: a.id, name: fullName(a) || "Atleta", club: a.club, city: a.city };
+  const athlete: PublicAthlete = { id: a.id, name: fullName(a) || "Atleta", club: a.club, city: a.city, gender: a.gender };
   return { athlete, participations, rankings };
 });
