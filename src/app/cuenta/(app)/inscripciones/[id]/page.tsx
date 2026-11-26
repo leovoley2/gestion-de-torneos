@@ -5,6 +5,8 @@ import { GENDER_LABEL, isUuid } from "@/lib/data";
 import { formatRange } from "@/lib/format";
 import { PAYMENT_LABEL, feeOf, formatSoles, getRegistration, paymentStatus } from "@/lib/registrations";
 import { PageTitle } from "@/components/AdminUI";
+import { appUrl } from "@/lib/email";
+import { inviteMessage, whatsappUrl } from "@/lib/whatsapp";
 import { RegistrationBadge } from "@/components/RegistrationBadge";
 import { DeclarationUpload, InvitationButtons, VoucherUpload, WithdrawButton } from "../../RegistrationButtons";
 
@@ -85,7 +87,30 @@ export default async function RegistrationPage({ params }: { params: Promise<{ i
           </div>
         )}
         {reg.status === "pending_partner" && reg.athlete1.id === me.id && (
-          <p className="mt-4 text-sm text-navy-400">Esperando que {fullName(reg.athlete2) || "tu compañero"} confirme desde su cuenta.</p>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-sky-50/60 px-4 py-3">
+            <p className="text-sm text-navy-600">
+              Esperando que {fullName(reg.athlete2) || "tu compañero"} acepte desde su cuenta. Le enviamos un correo; si no lo
+              revisa, avísale por WhatsApp.
+            </p>
+            <a
+              href={whatsappUrl(
+                inviteMessage({
+                  partnerFirstName: reg.athlete2.first_name.trim().split(/\s+/)[0] ?? "",
+                  tournament: c.tournament_name,
+                  category: c.name,
+                  url: `${appUrl()}/cuenta/inscripciones/${reg.id}`,
+                }),
+              )}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-[#25D366] px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-[filter,transform] duration-150 hover:brightness-95 active:scale-[0.97]"
+            >
+              <svg viewBox="0 0 24 24" className="size-4" fill="currentColor" aria-hidden="true">
+                <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2c0 1.3.9 2.5 1 2.7.1.2 1.8 2.8 4.4 3.9 1.6.7 2.3.8 3.1.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3Z" />
+              </svg>
+              Avisar por WhatsApp
+            </a>
+          </div>
         )}
       </section>
 
