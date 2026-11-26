@@ -13,6 +13,11 @@ import {
 import { RegistrationBadge } from "@/components/RegistrationBadge";
 import { PaymentToggle, RegistrationDecision, RegistrationSettingsForm } from "./RegistrationControls";
 
+const deadlineLabel = (d: Date | string | null) =>
+  d
+    ? new Date(d).toLocaleString("es-PE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "America/Lima" })
+    : "";
+
 const toLocalInput = (d: Date | string | null) => {
   if (!d) return "";
   const date = new Date(d);
@@ -32,6 +37,10 @@ export async function RegistrationsSection({
   const [category, registrations] = await Promise.all([getRegCategory(categoryId), getCategoryRegistrations(categoryId)]);
   if (!category) return null;
   const toReview = registrations.filter((r) => r.status === "pending_review").length;
+  // "Abiertas" con la fecha límite vencida: los atletas ya no ven la categoría.
+  const expired = Boolean(
+    category.registration_open && category.registration_deadline && new Date(category.registration_deadline) <= new Date(),
+  );
   const waiting = registrations.filter((r) => r.status === "pending_partner").length;
   const history = registrations.filter((r) => !["pending_review", "pending_partner"].includes(r.status));
   const active = registrations.filter((r) => ["pending_review", "pending_partner"].includes(r.status));
@@ -42,7 +51,12 @@ export async function RegistrationsSection({
         <div>
           <h2 className="font-semibold text-navy-900">Inscripciones de atletas</h2>
           <p className="mt-0.5 text-sm text-navy-400">
-            {category.registration_open ? "Abiertas" : "Cerradas"} · {toReview} por revisar · {waiting} esperando al compañero ·{" "}
+            {!category.registration_open
+              ? "Cerradas"
+              : expired
+                ? <span className="font-semibold text-amber-700">Cerradas: la fecha límite venció el {deadlineLabel(category.registration_deadline)}</span>
+                : "Abiertas"}{" "}
+            · {toReview} por revisar · {waiting} esperando al compañero ·{" "}
             {category.accepted}
             {category.max_teams ? ` de ${category.max_teams}` : ""} aceptadas
           </p>

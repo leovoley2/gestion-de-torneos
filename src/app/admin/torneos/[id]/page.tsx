@@ -119,6 +119,11 @@ export default async function AdminTournament({
                           Inscripciones abiertas
                         </span>
                       )}
+                      {c.registration_expired && (
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700 ring-1 ring-amber-200 ring-inset">
+                          Inscripción cerrada: venció la fecha límite
+                        </span>
+                      )}
                       {c.pending_reviews > 0 && (
                         <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700 ring-1 ring-amber-200 ring-inset">
                           {c.pending_reviews} por revisar

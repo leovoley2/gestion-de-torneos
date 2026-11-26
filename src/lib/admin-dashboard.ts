@@ -11,6 +11,8 @@ export interface CategorySummary {
   gender: "F" | "M" | "X";
   status: "setup" | "in_progress" | "finished";
   registration_open: boolean;
+  /** Marcada como abierta pero con la fecha límite ya vencida: los atletas ya no la ven. */
+  registration_expired: boolean;
   teams: number;
   has_format: boolean;
   matches: number;
@@ -72,7 +74,9 @@ export async function getCategorySummaries(
     timeZone: "America/Lima",
   });
   return sql<CategorySummary[]>`
-    select c.id, c.tournament_id, t.name as tournament_name, c.name, c.gender, c.status, c.registration_open,
+    select c.id, c.tournament_id, t.name as tournament_name, c.name, c.gender, c.status,
+      (c.registration_open and (c.registration_deadline is null or c.registration_deadline > now())) as registration_open,
+      (c.registration_open and c.registration_deadline <= now()) as registration_expired,
       (select count(*)::int from teams where category_id = c.id) as teams,
       (c.generated is not null) as has_format,
       coalesce(jsonb_array_length(c.generated -> 'matches'), 0)::int as matches,

@@ -17,6 +17,7 @@ const cat = (o: Partial<Cat>): Cat => ({
   gender: "F",
   status: "setup",
   registration_open: false,
+  registration_expired: false,
   teams: 0,
   has_format: false,
   matches: 0,
