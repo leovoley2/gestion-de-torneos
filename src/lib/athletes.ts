@@ -103,6 +103,32 @@ export function eligibilityIssues(c: CategoryRules, a: Athlete, b: Athlete): str
   return issues;
 }
 
+/**
+ * ¿Puede ESTE atleta jugar la categoría (sin saber aún quién es su pareja)? Devuelve el motivo si no.
+ * Sirve para mostrarle de antemano solo lo que le corresponde; la validación completa de la dupla
+ * sigue siendo eligibilityIssues.
+ */
+export function athleteFitReason(c: Pick<CategoryRules, "gender" | "min_birth_year" | "max_birth_year">, a: Pick<Athlete, "gender" | "birthdate">): string | null {
+  if (c.gender === "F" && a.gender === "M") return "Categoría femenina";
+  if (c.gender === "M" && a.gender === "F") return "Categoría masculina";
+  const year = a.birthdate ? Number(a.birthdate.slice(0, 4)) : null;
+  if (year !== null) {
+    if (c.min_birth_year && year < c.min_birth_year) return `Solo nacidos desde ${c.min_birth_year}`;
+    if (c.max_birth_year && year > c.max_birth_year) return `Solo nacidos hasta ${c.max_birth_year}`;
+  }
+  return null;
+}
+
+/** "Cierra hoy", "Cierra mañana", "Cierra en 5 días" o null si no hay fecha límite. */
+export function closesInLabel(deadline: Date | string | null, now = new Date()): string | null {
+  if (!deadline) return null;
+  const day = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "America/Lima" });
+  const days = Math.round((Date.parse(day(new Date(deadline))) - Date.parse(day(now))) / 86_400_000);
+  if (days <= 0) return "Cierra hoy";
+  if (days === 1) return "Cierra mañana";
+  return `Cierra en ${days} días`;
+}
+
 export const REGISTRATION_STATUS = {
   pending_partner: { label: "Esperando al compañero", tone: "wait" },
   pending_review: { label: "En revisión", tone: "wait" },

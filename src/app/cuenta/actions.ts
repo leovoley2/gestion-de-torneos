@@ -165,6 +165,40 @@ export async function createRegistration(_: Result | null, fd: FormData): Promis
   redirect(`/cuenta/inscripciones/${reg.id}`);
 }
 
+export type PartnerLookup =
+  | { ok: true; partner: { short: string; initials: string; club: string | null }; issues: string[] }
+  | { ok: false; error: string };
+
+/**
+ * Verifica al compañero ANTES de enviar la invitación: que exista, que tenga cuenta y si pueden jugar
+ * juntos la categoría. Solo devuelve nombre + inicial del apellido y club (no expone otros datos).
+ */
+export async function lookupPartner(categoryId: string, query: string): Promise<PartnerLookup> {
+  const me = await requireAthlete();
+  if (!isUuid(categoryId)) return { ok: false, error: "Elige primero la categoría" };
+  const q = String(query ?? "").trim();
+  if (q.length < 5) return { ok: false, error: "Escribe el correo o número de documento completo" };
+  const [category, partner] = await Promise.all([getRegCategory(categoryId), findAthleteByEmailOrDocument(q)]);
+  if (!category) return { ok: false, error: "Categoría no encontrada" };
+  if (!partner) {
+    return { ok: false, error: "No encontramos a nadie con ese dato. Tu compañero debe crear su cuenta y darte el correo o documento con el que se registró." };
+  }
+  if (partner.id === me.id) return { ok: false, error: "Ese eres tú: escribe el dato de tu compañero" };
+  if (!partner.email) return { ok: false, error: "Tu compañero todavía no tiene cuenta: debe registrarse para poder confirmar la inscripción." };
+  const issues: string[] = [];
+  if (partner.gender) issues.push(...eligibilityIssues(rulesOf(category), me, partner));
+  const conflict = await activeRegistrationConflict(categoryId, [me.id, partner.id]);
+  if (conflict) issues.push(conflict === me.id ? "Ya tienes una inscripción activa en esta categoría" : "Tu compañero ya tiene una inscripción activa en esta categoría");
+  const first = partner.first_name.trim().split(/\s+/)[0] ?? "";
+  const lastInitial = partner.last_name.trim()[0];
+  const short = [first, lastInitial ? `${lastInitial.toUpperCase()}.` : ""].filter(Boolean).join(" ") || "Atleta registrado";
+  return {
+    ok: true,
+    partner: { short, initials: `${first[0] ?? ""}${lastInitial ?? ""}`.toUpperCase() || "?", club: partner.club },
+    issues,
+  };
+}
+
 async function myRegistration(registrationId: string, me: Athlete) {
   if (!isUuid(registrationId)) return null;
   const reg = await getRegistration(registrationId);

@@ -117,3 +117,26 @@ describe("autorización del apoderado (menores de 14)", () => {
     expect(profileIssues(athlete({ birthdate: "2010-03-01", ...guardian }))).not.toContain("autorización del apoderado");
   });
 });
+
+describe("categorías que le corresponden al atleta", () => {
+  const cat = (o: Partial<CategoryRules>) => ({ gender: "F" as const, min_birth_year: null, max_birth_year: null, ...o });
+  it("rama y años de nacimiento", async () => {
+    const { athleteFitReason } = await import("./athletes");
+    expect(athleteFitReason(cat({}), { gender: "F", birthdate: "2000-01-01" })).toBeNull();
+    expect(athleteFitReason(cat({}), { gender: "M", birthdate: "2000-01-01" })).toBe("Categoría femenina");
+    expect(athleteFitReason(cat({ gender: "X" }), { gender: "M", birthdate: null })).toBeNull();
+    expect(athleteFitReason(cat({ min_birth_year: 2008 }), { gender: "F", birthdate: "2006-05-01" })).toBe("Solo nacidos desde 2008");
+    expect(athleteFitReason(cat({ max_birth_year: 2012 }), { gender: "F", birthdate: "2013-05-01" })).toBe("Solo nacidos hasta 2012");
+    // Sin sexo ni fecha en el perfil no se descarta (lo pide el perfil antes de inscribirse).
+    expect(athleteFitReason(cat({ min_birth_year: 2008 }), { gender: null, birthdate: null })).toBeNull();
+  });
+
+  it("cuándo cierra", async () => {
+    const { closesInLabel } = await import("./athletes");
+    const now = new Date("2026-11-26T15:00:00Z");
+    expect(closesInLabel(null, now)).toBeNull();
+    expect(closesInLabel("2026-11-26T23:00:00Z", now)).toBe("Cierra hoy");
+    expect(closesInLabel("2026-11-27T20:00:00Z", now)).toBe("Cierra mañana");
+    expect(closesInLabel("2026-12-10T17:00:00Z", now)).toBe("Cierra en 14 días");
+  });
+});
