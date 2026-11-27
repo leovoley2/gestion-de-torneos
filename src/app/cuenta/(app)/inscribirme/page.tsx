@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ageRuleShort } from "@/lib/age-rule";
 import { redirect } from "next/navigation";
 import { getAthlete } from "@/lib/athlete-auth";
 import { REGISTRATION_STATUS, closesInLabel, profileIssues } from "@/lib/athletes";
@@ -29,6 +30,7 @@ export default async function InscribirmePage({ searchParams }: { searchParams: 
         id: c.id,
         name: c.name,
         genderLabel: GENDER_LABEL[c.gender],
+        age: ageRuleShort(c),
         fee: fee !== null ? formatSoles(fee) : null,
         paymentInstructions: fee !== null ? c.payment_instructions : null,
         spots: spotsLeft === null ? null : spotsLeft === 0 ? "Sin cupos" : `${spotsLeft} ${spotsLeft === 1 ? "cupo libre" : "cupos libres"}`,

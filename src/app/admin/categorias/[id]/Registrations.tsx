@@ -10,6 +10,7 @@ import {
   rulesOf,
   type Registration,
 } from "@/lib/registrations";
+import { seasonYear } from "@/lib/age-rule";
 import { RegistrationBadge } from "@/components/RegistrationBadge";
 import { PaymentToggle, RegistrationDecision, RegistrationSettingsForm } from "./RegistrationControls";
 
@@ -78,6 +79,7 @@ export async function RegistrationsSection({
             maxYear: category.max_birth_year?.toString() ?? "",
             fee: category.registration_fee !== null ? String(Number(category.registration_fee)) : "",
           }}
+          year={seasonYear(category.start_date)}
         />
       ) : null}
 

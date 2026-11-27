@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { REGISTRATION_STATUS, closesInLabel } from "@/lib/athletes";
+import { ageRuleShort } from "@/lib/age-rule";
 import { GENDER_LABEL } from "@/lib/data";
 import { formatRange } from "@/lib/format";
 import { feeOf, formatSoles, type RegCategory } from "@/lib/registrations";
@@ -79,6 +80,7 @@ function CategoryRow({ item }: { item: StopCategory<RegCategory> }) {
           {c.name} <span className="text-sm font-normal text-navy-400">· {GENDER_LABEL[c.gender]}</span>
         </p>
         <p className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-navy-500">
+          <span>{ageRuleShort(c)}</span>
           <span>{fee !== null ? `${formatSoles(fee)} por dupla` : "Sin costo"}</span>
           {spotsLeft !== null && (
             <span className={spotsLeft <= 3 && spotsLeft > 0 ? "font-semibold text-amber-700" : ""}>

@@ -9,6 +9,7 @@ export interface WizardCategory {
   id: string;
   name: string;
   genderLabel: string;
+  age: string; // "Edad libre" o "Nacidos 2006–2014"
   fee: string | null; // "S/ 100"
   paymentInstructions: string | null;
   spots: string | null; // "3 cupos libres"
@@ -85,6 +86,7 @@ export function RegisterForm({ stops, selected }: { stops: WizardStop[]; selecte
                             {c.name} <span className="font-normal text-navy-400">· {c.genderLabel}</span>
                           </span>
                           <span className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-navy-500">
+                            <span>{c.age}</span>
                             <span>{c.fee ? `${c.fee} por dupla` : "Sin costo"}</span>
                             {c.spots && <span>{c.spots}</span>}
                           </span>

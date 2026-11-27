@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { ageRuleSentence, underYear } from "@/lib/age-rule";
 import { acceptRegistration, rejectRegistration, setRegistrationPaid, updateRegistrationSettings } from "@/app/admin/registration-actions";
 
 type Msg = { ok: boolean; text: string } | null;
@@ -16,9 +17,12 @@ const Message = ({ msg }: { msg: Msg }) =>
 export function RegistrationSettingsForm({
   categoryId,
   initial,
+  year,
 }: {
   categoryId: string;
   initial: { open: boolean; deadline: string; maxTeams: string; minYear: string; maxYear: string; fee: string };
+  /** Año de la temporada, para traducir años de nacimiento a edades. */
+  year: number;
 }) {
   const [msg, setMsg] = useState<Msg>(null);
   const [pending, start] = useTransition();
@@ -50,17 +54,10 @@ export function RegistrationSettingsForm({
         <input type="number" name="max_teams" min={2} defaultValue={initial.maxTeams} placeholder="Sin límite" className="input mt-1" />
       </label>
       <label className="block text-xs font-medium text-navy-600">
-        Nacidos desde (año)
-        <input type="number" name="min_birth_year" defaultValue={initial.minYear} placeholder="Ej. 2008" className="input mt-1" />
-      </label>
-      <label className="block text-xs font-medium text-navy-600">
-        Nacidos hasta (año)
-        <input type="number" name="max_birth_year" defaultValue={initial.maxYear} placeholder="—" className="input mt-1" />
-      </label>
-      <label className="block text-xs font-medium text-navy-600">
         Monto por dupla (S/)
         <input type="number" name="registration_fee" min={0} step="0.01" defaultValue={initial.fee} placeholder="Gratis" className="input mt-1" />
       </label>
+      <AgeRuleFields minYear={initial.minYear} maxYear={initial.maxYear} year={year} />
       <div className="flex flex-wrap items-center gap-3 sm:col-span-2 lg:col-span-6">
         <button className="btn-primary" disabled={pending}>
           {pending ? "Guardando…" : "Guardar ajustes"}
@@ -68,6 +65,76 @@ export function RegistrationSettingsForm({
         <Message msg={msg} />
       </div>
     </form>
+  );
+}
+
+/** Edad libre o con límite, con la frase de quiénes pueden inscribirse calculada en vivo. */
+function AgeRuleFields({ minYear, maxYear, year }: { minYear: string; maxYear: string; year: number }) {
+  const [limited, setLimited] = useState(Boolean(minYear || maxYear));
+  const [min, setMin] = useState(minYear);
+  const [max, setMax] = useState(maxYear);
+  const toYear = (v: string) => (/^\d{4}$/.test(v.trim()) ? Number(v) : null);
+  const rule = limited ? { min_birth_year: toYear(min), max_birth_year: toYear(max) } : { min_birth_year: null, max_birth_year: null };
+  const inverted = rule.min_birth_year && rule.max_birth_year && rule.min_birth_year > rule.max_birth_year;
+  const option = (on: boolean, label: string, hint: string) => (
+    <label
+      className={`flex flex-1 basis-48 cursor-pointer items-start gap-2.5 rounded-lg bg-white px-3 py-2.5 ring-1 ring-inset transition-colors ${limited === on ? "ring-navy-700" : "ring-navy-100 hover:ring-navy-300"}`}
+    >
+      <input type="radio" name="age_mode" checked={limited === on} onChange={() => setLimited(on)} className="mt-0.5 size-4 accent-navy-800" />
+      <span>
+        <span className="block text-sm font-semibold text-navy-900">{label}</span>
+        <span className="block text-xs text-navy-500">{hint}</span>
+      </span>
+    </label>
+  );
+  return (
+    <fieldset className="space-y-3 sm:col-span-2 lg:col-span-6">
+      <legend className="mb-1.5 text-xs font-medium text-navy-600">Edad de los atletas</legend>
+      <div className="flex flex-wrap gap-2">
+        {option(false, "Edad libre", "Cualquier edad (adultos, libre)")}
+        {option(true, "Con límite de edad", "Menores: U15, U17, U19, U21…")}
+      </div>
+      {limited && (
+        <div className="space-y-3 rounded-lg bg-white p-3 ring-1 ring-navy-100 ring-inset">
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="text-navy-500">Atajo {year}:</span>
+            {[15, 17, 19, 21, 23].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => {
+                  setMin(String(underYear(n, year)));
+                  setMax("");
+                }}
+                className="rounded-full bg-navy-50 px-2.5 py-1 font-semibold text-navy-700 hover:bg-navy-100"
+              >
+                U{n}
+              </button>
+            ))}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-xs font-medium text-navy-600">
+              Nacidos desde (año) <span className="font-normal text-navy-400">· el mayor permitido</span>
+              <input
+                type="number"
+                name="min_birth_year"
+                value={min}
+                onChange={(e) => setMin(e.target.value)}
+                placeholder={`Ej. ${underYear(21, year)}`}
+                className="input mt-1"
+              />
+            </label>
+            <label className="block text-xs font-medium text-navy-600">
+              Nacidos hasta (año) <span className="font-normal text-navy-400">· opcional, el menor permitido</span>
+              <input type="number" name="max_birth_year" value={max} onChange={(e) => setMax(e.target.value)} placeholder="Sin límite" className="input mt-1" />
+            </label>
+          </div>
+        </div>
+      )}
+      <p className={`rounded-lg px-3 py-2 text-sm font-medium ${inverted ? "bg-red-50 text-red-800" : "bg-sky-50 text-sky-900"}`} aria-live="polite">
+        {inverted ? "«Nacidos desde» debe ser un año anterior o igual a «nacidos hasta»." : ageRuleSentence(rule, year)}
+      </p>
+    </fieldset>
   );
 }
 
