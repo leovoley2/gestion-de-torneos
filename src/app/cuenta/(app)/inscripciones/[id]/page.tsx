@@ -152,8 +152,9 @@ export default async function RegistrationPage({ params }: { params: Promise<{ i
           <div>
             <h2 className="font-semibold text-navy-900">Declaración jurada de menores</h2>
             <p className="mt-0.5 text-sm text-navy-400">
-              Cada menor de edad debe subir la declaración jurada firmada por su padre, madre o apoderado. La
-              organización no puede aceptar la inscripción sin ellas.
+              Cada menor de edad debe subir la declaración jurada firmada por su padre, madre o apoderado. Descárgala ya
+              llenada con tus datos, imprímela, que la firme tu apoderado y súbela escaneada o en foto convertida a PDF. La
+              organización no puede aceptar la inscripción sin ella.
             </p>
           </div>
           <ul className="space-y-3">
@@ -169,6 +170,22 @@ export default async function RegistrationPage({ params }: { params: Promise<{ i
                   </div>
                   {a.id === me.id && (
                     <div className="mt-3 space-y-3">
+                      <a
+                        href={`/api/declaracion-modelo/${reg.id}/${me.id}`}
+                        className="flex items-center gap-3 rounded-xl bg-navy-900 px-4 py-3 text-white transition-colors duration-150 hover:bg-navy-800"
+                      >
+                        <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg bg-white/10">
+                          <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.6">
+                            <path d="M8 2v8m0 0 3-3m-3 3L5 7M3 12.5h10" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold">Descargar declaración jurada (PDF)</span>
+                          <span className="block text-xs text-sky-200">
+                            Ya llenada con tus datos y los de tu apoderado · Federación Peruana de Voleibol
+                          </span>
+                        </span>
+                      </a>
                       {d && (
                         <a href={`/api/declaraciones/${reg.id}/${me.id}`} target="_blank" className="text-sm font-semibold text-sky-600">
                           Ver el PDF subido ↗
